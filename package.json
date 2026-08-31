@@ -1,0 +1,21 @@
+{
+  "name": "video-visuals-v3",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host --port 5274",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host --port 5275"
+  },
+  "dependencies": {
+    "@mediapipe/tasks-vision": "^1.0.1",
+    "three": "^0.168.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.168.0",
+    "typescript": "^5.5.4",
+    "vite": "^5.4.0",
+    "ws": "^8.21.3"
+  }
+}

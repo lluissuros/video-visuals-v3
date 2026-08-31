@@ -1,0 +1,9 @@
+# media is heavy and personal; drop source clips into public/media yourself
+public/media/*
+!public/media/.gitkeep
+# mediapipe model, fetched by tools/fetch-models.sh
+public/models/*
+!public/models/.gitkeep
+node_modules/
+dist/
+.DS_Store
