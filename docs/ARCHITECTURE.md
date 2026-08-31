@@ -7,13 +7,13 @@ passes, never new wiring.
 
 ```
 sources/                     control/                    engine/
-  video  ──────────────────►  bus ── ControlFrame ────►   flow pass (feedback)
-  palette (k-means)  ─────►    ▲                            │
-  camera ─► tracking mask ─────┼────────────────────────►  present pass ─► screen
-                               │
-  audio (FFT/onset) ───────────┤
-  granulizer WS client ────────┤   scenes/ (presets + turn→scene sequencer)
-  simulator ───────────────────┤
+  media (video/image/dnd) ──►  bus ── ControlFrame ──►    generative pass (fractal)
+  palette (k-means)  ─────►    ▲                            │ light + warp field
+  camera ─► tracking mask ─────┼───────────────────────►  flow pass (feedback)
+                               │                            │
+  audio (FFT/onset) ───────────┤                          present pass ─► screen
+  granulizer WS client ────────┤                            (kaleido, palette, sat)
+  simulator ───────────────────┤   scenes/ (presets + turn→scene sequencer)
   midi ────────────────────────┘
 ```
 
@@ -30,14 +30,24 @@ sources/                     control/                    engine/
 - `src/control/audio.ts` — band energies + spectral-flux onsets from any input.
 - `src/sources/palette.ts` — k-means over a 64×36 downsample every few seconds,
   seeded from the previous palette so colors glide. Index 0 = most saturated.
+- `src/sources/media.ts` — the catalogue: manifest + drag&drop, video or
+  image, playback speed, loop-a-region.
 - `src/engine/renderer.ts` — half-res ping-pong feedback buffer (HalfFloat),
-  two passes only:
+  three passes:
+  - `passes/generative.ts` — Nishitsuji-style fractal layer (interference
+    tunnel / folded filaments / kali lace). rgb = light, alpha = a scalar
+    field. Runs only when the scene asks for it.
   - `passes/flow.ts` — displace previous frame along curl noise (+ swirl,
-    zoom), fade by `feed`, inject posterized video, inject mask-edge light.
-  - `passes/present.ts` — palette remap (nearest-two blend, luma preserved),
-    exposure/tonemap, vignette, grain, performer silhouette.
-- `src/scenes/scenes.ts` — four presets (ascua, marea, vortice, respira) that
-  change the flow's character, not the performer's macros.
+    zoom, blur-diffusion), fade by `feed`, inject posterized video (warped by
+    the fractal field - this braids the two), mix in fractal light
+    (energy-conserving mix, NEVER additive: an additive term in a feedback
+    loop multiplies by 1/(1-keep) and blows white), inject mask-edge light.
+  - `passes/present.ts` — kaleidoscope fold (angle sectors + rippling
+    radius), palette remap (nearest-two blend, luma preserved),
+    exposure/tonemap, saturation, vignette, grain, performer silhouette.
+- `src/scenes/scenes.ts` — six presets (ascua, marea, espejo, cueva, puro,
+  respira) that change the piece's character, not the performer's macros.
+  Scene switches are instant; the feedback buffer morphs between them.
 - `src/tracking/bodyTracking.ts` — MediaPipe selfie segmentation → mask
   texture. Self-contained; when it fails the app runs without it.
 

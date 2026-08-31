@@ -2,16 +2,20 @@
 // everything that produces control data implements one of the provider interfaces.
 // New input hardware (MIDI, OSC, sensors) writes into the bus, never into the engine.
 
-/** The six expressive macros. Every value is 0..1. */
+/** The expressive macros. Every value is 0..1. */
 export interface Macros {
   /** How hard the flow field displaces the image. */
   flow: number;
   /** Trail persistence of the feedback buffer. */
   feed: number;
-  /** Dreaminess: blur + slow zoom into the feedback. */
+  /** Dreaminess: slow zoom into the feedback. */
   wash: number;
+  /** Diffusion radius: melts hard and pixelated edges. */
+  blur: number;
   /** How hard colors snap to the extracted movie palette. */
   palette: number;
+  /** Saturation, up to way-too-much on purpose. */
+  sat: number;
   /** Depth of audio modulation on top of everything. */
   pulse: number;
   /** Film grain and noise floor. */
@@ -19,7 +23,7 @@ export interface Macros {
 }
 
 export const MACRO_NAMES: (keyof Macros)[] = [
-  'flow', 'feed', 'wash', 'palette', 'pulse', 'grain',
+  'flow', 'feed', 'wash', 'blur', 'palette', 'sat', 'pulse', 'grain',
 ];
 
 export interface AudioSignals {
@@ -50,10 +54,9 @@ export interface ControlFrame {
   macros: Macros;
   audio: AudioSignals;
   wave: WaveState;
-  /** Active visual scene index and crossfade toward the incoming one. */
-  sceneA: number;
-  sceneB: number;
-  sceneMix: number;
+  /** Active visual scene index. Changes are instant; the feedback buffer
+   *  carries the visual continuity. */
+  scene: number;
 }
 
 export interface ScenePreset {
@@ -72,4 +75,14 @@ export interface ScenePreset {
   hueShift: number;
   /** 0 = keep video luma, 1 = pure palette fields. */
   abstraction: number;
+  /** Generative fractal layer: 0 off, 1 tunel, 2 pliegue, 3 kali. */
+  gen: number;
+  /** How much fractal light injects into the feedback. */
+  genMix: number;
+  /** How much the fractal field warps the video sampling. */
+  genWarp: number;
+  /** Kaleidoscope sectors on the output, 0 = off. */
+  kaleido: number;
+  /** Kaleidoscope rotation speed, radians/second. */
+  kaleidoSpin: number;
 }

@@ -1,4 +1,5 @@
 // Source clip -> texture. Muted + loop so autoplay is allowed everywhere.
+// Supports playback speed and looping a short region ("stay on these 2 s").
 
 import * as THREE from 'three';
 
@@ -6,8 +7,12 @@ export class VideoSource {
   readonly element: HTMLVideoElement;
   readonly texture: THREE.VideoTexture;
   ready = false;
+  /** Loop region start in seconds, null = whole clip. */
+  loopStart: number | null = null;
+  loopLength = 2;
+  private nudge: number;
 
-  constructor(url: string) {
+  constructor(url: string, randomSeek = true) {
     const v = document.createElement('video');
     v.src = url;
     v.muted = true;
@@ -26,20 +31,24 @@ export class VideoSource {
       // ?seek=<seconds> pins it for reproducible tests.
       const seek = new URLSearchParams(location.search).get('seek');
       if (Number.isFinite(v.duration) && v.duration > 10) {
-        v.currentTime = seek !== null
-          ? Number(seek)
-          : (0.05 + Math.random() * 0.85) * v.duration;
+        if (seek !== null) v.currentTime = Number(seek);
+        else if (randomSeek) v.currentTime = (0.05 + Math.random() * 0.85) * v.duration;
       }
     });
     v.addEventListener('canplay', () => {
       this.ready = true;
       v.play().catch(() => {});
     });
+    v.addEventListener('timeupdate', () => {
+      if (this.loopStart !== null && v.currentTime > this.loopStart + this.loopLength) {
+        v.currentTime = this.loopStart;
+      }
+    });
     // A seek can interrupt play(), and some browsers refuse autoplay in a tab
     // opened without a gesture. Keep nudging until it actually runs.
-    const nudge = window.setInterval(() => {
+    this.nudge = window.setInterval(() => {
       if (!v.paused) {
-        window.clearInterval(nudge);
+        window.clearInterval(this.nudge);
         return;
       }
       if (v.readyState >= 2) v.play().catch(() => {});
@@ -53,9 +62,26 @@ export class VideoSource {
     window.addEventListener('keydown', kick);
   }
 
+  setSpeed(rate: number) {
+    this.element.playbackRate = Math.min(4, Math.max(0.0625, rate));
+  }
+
+  /** Toggle looping a region starting at the current moment. */
+  toggleLoop(lengthSeconds: number): boolean {
+    if (this.loopStart === null) {
+      this.loopStart = this.element.currentTime;
+      this.loopLength = lengthSeconds;
+      return true;
+    }
+    this.loopStart = null;
+    return false;
+  }
+
   dispose() {
+    window.clearInterval(this.nudge);
     this.element.pause();
     this.element.removeAttribute('src');
+    this.element.load();
     this.texture.dispose();
   }
 }

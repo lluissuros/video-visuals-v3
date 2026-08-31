@@ -24,4 +24,6 @@ export const config = {
   paletteInterval: 4,
   /** Scene length in clock mode, seconds. */
   clockSceneSeconds: 45,
+  /** ?scene=N forces a scene (1-based) and starts with HOLD on. */
+  scene: q.get('scene') !== null ? Number(q.get('scene')) - 1 : null,
 };

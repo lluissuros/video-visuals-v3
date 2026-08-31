@@ -51,4 +51,26 @@ float hash12(vec2 p) {
   p3 += dot(p3, p3.yzx + 33.33);
   return fract((p3.x + p3.y) * p3.z);
 }
+
+vec3 hsv(float h, float s, float v) {
+  vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+  vec3 p = abs(fract(vec3(h) + K.xyz) * 6.0 - K.www);
+  return v * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), s);
+}
+
+mat2 rot2(float a) {
+  float c = cos(a), s = sin(a);
+  return mat2(c, -s, s, c);
+}
+
+// Rodrigues rotation around an arbitrary axis.
+mat3 rot3(float a, vec3 ax) {
+  ax = normalize(ax);
+  float c = cos(a), s = sin(a), k = 1.0 - c;
+  return mat3(
+    ax.x*ax.x*k + c,      ax.x*ax.y*k - ax.z*s, ax.x*ax.z*k + ax.y*s,
+    ax.y*ax.x*k + ax.z*s, ax.y*ax.y*k + c,      ax.y*ax.z*k - ax.x*s,
+    ax.z*ax.x*k - ax.y*s, ax.z*ax.y*k + ax.x*s, ax.z*ax.z*k + c
+  );
+}
 `;

@@ -1,6 +1,6 @@
-// Present pass: feedback buffer -> screen. Palette remap, tone shaping,
-// vignette, grain. Display-only, so turning the palette knob down always
-// recovers the untouched feedback colors.
+// Present pass: feedback buffer -> screen. Optional kaleidoscope fold, palette
+// remap, saturation, tone shaping, vignette, grain. Display-only, so turning
+// any knob down always recovers the untouched feedback.
 
 import { NOISE } from './glsl';
 
@@ -12,12 +12,17 @@ uniform sampler2D uFeedback;
 uniform sampler2D uMask;
 uniform float uHasMask;
 uniform float uTime;
+uniform vec2 uAspect;
 
 uniform float uPalette;   // macro: remap strength
+uniform float uSat;       // macro: saturation, way past tasteful on purpose
 uniform float uGrain;     // macro
 uniform float uPulse;
 uniform float uEnergy;
 uniform float uOnset;
+
+uniform float uKaleido;      // sectors, 0 = off
+uniform float uKaleidoSpin;  // radians/second
 
 uniform vec3 uColors[5];  // extracted movie palette, most saturated first
 
@@ -44,6 +49,21 @@ vec3 nearestPaletteMix(vec3 c) {
 
 void main() {
   vec2 uv = vUv;
+
+  // kaleidoscope: fold the angle into 2N mirrored sectors, slowly turning.
+  // The radius ripples too, so the center pulls in content instead of showing
+  // one flat disc of whatever sits mid-frame.
+  if (uKaleido > 0.5) {
+    vec2 d = (uv - 0.5) * uAspect;
+    float R = length(d);
+    float a = atan(d.y, d.x) + uTime * uKaleidoSpin;
+    float sector = 3.14159265 / uKaleido;
+    a = abs(mod(a, sector * 2.0) - sector);
+    R = R * (0.7 + 0.3 * cos(R * 14.0 - uTime * 0.13)) + 0.05;
+    d = vec2(cos(a), sin(a)) * R;
+    uv = d / uAspect + 0.5;
+  }
+
   vec3 c = texture2D(uFeedback, uv).rgb;
 
   // remap toward the movie's own colors, keeping the buffer's luma so motion
@@ -58,9 +78,9 @@ void main() {
   // clipping the trails; audio adds a touch on top
   c *= 1.9 + uEnergy * uPulse * 0.8 + uOnset * uPulse * 0.3;
   c = c / (1.0 + c) * 1.55;
-  // mild saturation push, the palette deserves it
+  // saturation: 0 -> grayscale, 0.29 -> neutral, 1 -> violent
   float l2 = dot(c, vec3(0.299, 0.587, 0.114));
-  c = mix(vec3(l2), c, 1.25);
+  c = mix(vec3(l2), c, uSat * 3.5);
 
   // performers: keep them dark holes with a warm rim (the aura around them is
   // already in the feedback)
@@ -70,8 +90,8 @@ void main() {
   }
 
   // vignette
-  vec2 d = uv - 0.5;
-  c *= 1.0 - dot(d, d) * 0.4;
+  vec2 dv = uv - 0.5;
+  c *= 1.0 - dot(dv, dv) * 0.4;
 
   // grain
   float g = hash12(uv * 1371.0 + fract(uTime) * 917.0) - 0.5;
