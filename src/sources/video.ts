@@ -13,6 +13,7 @@ export class VideoSource {
     v.muted = true;
     v.loop = true;
     v.playsInline = true;
+    v.autoplay = true;
     v.crossOrigin = 'anonymous';
     v.preload = 'auto';
     this.element = v;
@@ -32,17 +33,24 @@ export class VideoSource {
     });
     v.addEventListener('canplay', () => {
       this.ready = true;
-      v.play().catch(() => {
-        // Autoplay refused: retry on the first gesture.
-        const kick = () => {
-          v.play().catch(() => {});
-          window.removeEventListener('pointerdown', kick);
-          window.removeEventListener('keydown', kick);
-        };
-        window.addEventListener('pointerdown', kick);
-        window.addEventListener('keydown', kick);
-      });
+      v.play().catch(() => {});
     });
+    // A seek can interrupt play(), and some browsers refuse autoplay in a tab
+    // opened without a gesture. Keep nudging until it actually runs.
+    const nudge = window.setInterval(() => {
+      if (!v.paused) {
+        window.clearInterval(nudge);
+        return;
+      }
+      if (v.readyState >= 2) v.play().catch(() => {});
+    }, 1500);
+    const kick = () => {
+      if (v.paused) v.play().catch(() => {});
+      window.removeEventListener('pointerdown', kick);
+      window.removeEventListener('keydown', kick);
+    };
+    window.addEventListener('pointerdown', kick);
+    window.addEventListener('keydown', kick);
   }
 
   dispose() {

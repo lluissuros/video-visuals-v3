@@ -104,6 +104,7 @@ function tick(now: number) {
     tracker: tracker.running,
     trackErr: tracker.error ?? camera.error,
     video: video.element.currentTime.toFixed(1),
+    fps: Math.round(fpsAvg),
   }));
 
   panel.update(
