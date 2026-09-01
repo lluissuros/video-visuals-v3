@@ -3,8 +3,8 @@
 // and a live wave meter. Hidden with `h`; `i` opens the instructions. The
 // projector never needs to see any of it.
 
-import type { Macros } from '../types';
-import { MACRO_NAMES, GEN_TYPE_NAMES } from '../types';
+import type { CamParams, Macros } from '../types';
+import { DEFAULT_CAM, MACRO_NAMES, GEN_TYPE_NAMES } from '../types';
 import { SCENES } from '../scenes/scenes';
 import type { ControlBus } from '../control/bus';
 import type { MidiControl } from '../control/midi';
@@ -53,7 +53,16 @@ const GEN_SLIDERS: [GenKey, string][] = [
   ['speed', 'velocidad del shader (0.5 = 1x)'],
   ['zoom', 'zoom del shader (0.5 = 1x)'],
   ['opacity', 'presencia del shader (0.5 = la de la escena)'],
-  ['video', 'cuánto tiñe y recorta el vídeo al shader'],
+  ['video', 'cuánto colorea y dibuja el vídeo dentro del shader (necesita opacity > 0)'],
+];
+
+type CamKey = keyof CamParams;
+const CAM_SLIDERS: [CamKey, string, string][] = [
+  ['silOpacity', 'silueta', 'presencia de la silueta (0 = invisible)'],
+  ['silTint', 'tinte', 'cuerpo oscuro (0) o lleno del color del aura (1)'],
+  ['aura', 'aura', 'fuerza de la emanación'],
+  ['auraSize', 'tamaño', 'alcance del halo alrededor del cuerpo'],
+  ['auraSpeed', 'emanar', 'velocidad de las ondas de color que salen del cuerpo'],
 ];
 
 export class Panel {
@@ -71,6 +80,7 @@ export class Panel {
   private speedLabel: HTMLSpanElement;
   private genTypeSel: HTMLSelectElement;
   private genSliders = new Map<GenKey, HTMLInputElement>();
+  private camSliders = new Map<CamKey, HTMLInputElement>();
   private presetSel: HTMLSelectElement;
   private sliders = new Map<keyof Macros, HTMLInputElement>();
   private learnBtns = new Map<keyof Macros, HTMLButtonElement>();
@@ -142,6 +152,17 @@ export class Panel {
       () => hooks.onToggleCamera());
     btnRow.append(this.loopBtn, this.cameraBtn);
     this.root.appendChild(btnRow);
+
+    // --- camera / silhouette -------------------------------------------------
+    this.section('cámara');
+    for (const [key, label, help] of CAM_SLIDERS) {
+      const row = this.sliderRow(label, 0, 1, 0.001, bus.cam[key], (v) => {
+        bus.cam[key] = v;
+      });
+      row.row.title = help;
+      row.val.remove();
+      this.camSliders.set(key, row.input);
+    }
 
     // --- generative layer ----------------------------------------------------
     this.section('shader');
@@ -283,6 +304,7 @@ export class Panel {
       scene: this.bus.currentScene(),
       macros: { ...this.bus.macros },
       gen: { ...this.bus.gen },
+      cam: { ...this.bus.cam },
       source: {
         url: this.hooks.media.current?.url ?? '',
         speed: this.hooks.media.speedRate,
@@ -332,6 +354,7 @@ export class Panel {
     this.bus.hold = true;
     this.bus.macros = { ...p.macros };
     this.bus.gen = { ...p.gen };
+    this.bus.cam = { ...(p.cam ?? DEFAULT_CAM) };
     // source: only manifest entries survive a reload (drag&drop URLs die)
     const item = this.hooks.media.items.find((i) => i.url === p.source.url);
     if (item && item !== this.hooks.media.current) {
@@ -349,6 +372,7 @@ export class Panel {
       if (el) el.value = String(this.bus.macros[name]);
     }
     for (const [key, el] of this.genSliders) el.value = String(this.bus.gen[key]);
+    for (const [key, el] of this.camSliders) el.value = String(this.bus.cam[key]);
     this.genTypeSel.selectedIndex = this.bus.gen.type;
     this.speedSlider.value = String(Math.log2(this.hooks.media.speedRate));
     this.speedLabel.textContent = `${this.hooks.media.speedRate.toFixed(2)}x`;
@@ -424,10 +448,14 @@ export class Panel {
       <p>Las escenas siguen al granulizer cuando está conectado (una canción,
       una escena, en serie). Sin granulizer, avanzan solas por reloj. HOLD las
       congela. Los botones «midi» asignan un knob físico a cada macro.</p>
-      <p>Cámara: botón «camera» del panel (pide permiso). La silueta entra en
-      el feedback como fuente - los efectos fluyen por encima - y emana luz
-      del color de la paleta. «m» muestra la máscara; ?maskinvert=1 en la URL
-      si sale invertida.</p>`;
+      <h2>cámara</h2>
+      <p>Botón «camera» del panel (pide permiso). La silueta entra en el
+      feedback - los efectos fluyen por encima - y del cuerpo salen ondas de
+      color hacia fuera, cada una con un matiz nuevo. Sus sliders: «silueta»
+      (presencia del cuerpo), «tinte» (cuerpo oscuro o del color del aura),
+      «aura» (fuerza), «tamaño» (alcance del halo), «emanar» (velocidad de
+      las ondas). «m» muestra la máscara; ?maskinvert=1 en la URL si sale
+      invertida.</p>`;
     document.body.appendChild(this.instructions);
   }
 

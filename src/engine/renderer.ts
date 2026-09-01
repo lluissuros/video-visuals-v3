@@ -97,6 +97,11 @@ export class Engine {
         uGenMix: { value: 0 },
         uGenWarp: { value: 0 },
         uAuraColor: { value: new THREE.Vector3(1, 0.2, 0.1) },
+        uSilOpacity: { value: 0.75 },
+        uSilTint: { value: 0.1 },
+        uAura: { value: 0.6 },
+        uAuraSize: { value: 0.5 },
+        uAuraSpeed: { value: 0.5 },
       },
     });
 
@@ -208,6 +213,11 @@ export class Engine {
     fu.uGenMix.value = genOn ? genMix : 0;
     fu.uGenWarp.value = genOn ? genWarp : 0;
     (fu.uAuraColor.value as THREE.Vector3).copy(this.paletteUniform[0]);
+    fu.uSilOpacity.value = frame.cam.silOpacity;
+    fu.uSilTint.value = frame.cam.silTint;
+    fu.uAura.value = frame.cam.aura;
+    fu.uAuraSize.value = frame.cam.auraSize;
+    fu.uAuraSpeed.value = frame.cam.auraSpeed;
 
     const next = 1 - this.current;
     this.renderer.setRenderTarget(this.targets[next]);

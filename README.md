@@ -44,7 +44,11 @@ One-time, only for the performer-tracking prototype:
   loop button, camera on/off.
 - **shader** — force any generative shader (tunel, pliegue, kali, columnas,
   olas, orbita) over any scene, with speed / zoom / opacity knobs and a
-  `video` knob that lets the source tint and gate the fractal.
+  `video` knob that recolors the fractal with the film's chroma and lets its
+  shapes surface (needs opacity > 0 to be visible).
+- **cámara** — `silueta` (body presence, 0 = invisible), `tinte` (dark body
+  vs aura-colored), `aura` (emanation strength), `tamaño` (halo reach),
+  `emanar` (speed of the color waves leaving the body).
 - **macros** — `flow` (drag), `feed` (trails), `wash` (zoom drift), `blur`
   (diffusion, big range), `palette` (snap to extracted colors), `sat`
   (0.29 = neutral), `pulse` (audio depth), `grain`. Each has a `midi`
@@ -76,7 +80,7 @@ without it they advance on a timer. `p` freezes them for study.
 | `shader` | — | force a generative shader (1-6) on top of the scene |
 | `audio` | `1` | external audio analysis |
 | `camera` | off | `1` starts the tracking prototype on load |
-| `res` | `0.5` | feedback buffer scale; lower on the M1 if fps drops |
+| `res` | `1` | feedback buffer scale; drop to `0.5` on the M1 if fps suffers |
 | `seek` | random | start position in the clip, seconds |
 | `maskinvert` | — | `1` flips the person mask if a model comes out inverted |
 

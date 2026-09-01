@@ -17,8 +17,9 @@ export const config = {
   structure: (q.get('structure') ?? 'sim') as StructureMode,
   audioEnabled: q.get('audio') !== '0',
   cameraEnabled: q.get('camera') === '1',
-  /** Feedback buffer resolution relative to the canvas. */
-  resScale: Number(q.get('res') ?? '0.5'),
+  /** Feedback buffer resolution relative to the canvas. 1 = full res;
+   *  drop to 0.5 on a weaker machine (the M1) if fps suffers. */
+  resScale: Number(q.get('res') ?? '1'),
   paletteSize: 5,
   /** Seconds between palette re-extractions. */
   paletteInterval: 4,

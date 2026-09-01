@@ -49,12 +49,16 @@ export class MediaManager {
     }
     const wanted = this.items.find((i) => i.url === defaultUrl) ?? this.items[0];
     this.select(wanted);
+    // The manifest fetch resolves after the panel is built: tell it the
+    // catalogue exists, or the source selector starts empty.
+    this.onListChange?.();
     this.watchDrops();
   }
 
   select(item: MediaItem, startAt: number | null = null) {
     this.disposeCurrent();
     this.current = item;
+    this.onListChange?.();
     if (item.kind === 'video') {
       this.video = new VideoSource(item.url, startAt);
       this.video.setSpeed(this.speed);

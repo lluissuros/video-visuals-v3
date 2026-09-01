@@ -6,7 +6,7 @@
 // A source added by drag&drop lives on a blob: URL that dies with the tab, so
 // a preset can only restore sources that exist in public/media (the manifest).
 
-import type { GenOverrides, Macros } from '../types';
+import type { CamParams, GenOverrides, Macros } from '../types';
 
 export interface Preset {
   name: string;
@@ -14,6 +14,8 @@ export interface Preset {
   scene: number;
   macros: Macros;
   gen: GenOverrides;
+  /** Optional: presets saved before the camera params existed lack it. */
+  cam?: CamParams;
   source: {
     url: string;
     speed: number;

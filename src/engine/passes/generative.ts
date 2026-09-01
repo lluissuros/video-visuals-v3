@@ -181,13 +181,16 @@ void main() {
   else if (uType == 5) g = olas(uv, t);
   else                 g = orbita(uv, t);
 
-  // The source video tints the fractal and gates its brightness, so the
-  // film's colors and shapes read through the generative light.
+  // The source video recolors the fractal with its own chroma (independent
+  // of brightness, so a dark film still tints instead of just dimming) and
+  // its shapes surface where the fractal glows. At knob 0: pure fractal.
   if (uHasVideo > 0.5 && uVideoInf > 0.001) {
     vec3 vid = texture2D(uVideo, vUv).rgb;
     float vl = dot(vid, vec3(0.299, 0.587, 0.114));
-    g.rgb *= mix(vec3(1.0), vid * 2.2 + 0.15, uVideoInf);
-    g.rgb *= mix(1.0, 0.25 + 1.75 * vl, uVideoInf * 0.8);
+    vec3 chroma = vid / max(vl, 0.12);
+    float gl = dot(g.rgb, vec3(0.299, 0.587, 0.114));
+    vec3 filmed = g.rgb * chroma * (0.35 + 1.65 * vl) + vid * vid * gl * 2.5;
+    g.rgb = mix(g.rgb, filmed, uVideoInf);
   }
 
   // onset flashes the layer a touch

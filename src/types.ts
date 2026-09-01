@@ -67,6 +67,29 @@ export const GEN_TYPE_NAMES = [
   'escena', 'tunel', 'pliegue', 'kali', 'columnas', 'olas', 'orbita',
 ];
 
+/** Performer-camera parameters, adjustable from the panel, saved in presets.
+ *  All 0..1. */
+export interface CamParams {
+  /** Silhouette presence: 0 = invisible, 1 = solid dark figure. */
+  silOpacity: number;
+  /** Body fill: 0 = dark, 1 = filled with the aura color. */
+  silTint: number;
+  /** Emanation strength. */
+  aura: number;
+  /** Halo reach around the body. */
+  auraSize: number;
+  /** How fast the color waves travel outward. */
+  auraSpeed: number;
+}
+
+export const DEFAULT_CAM: CamParams = {
+  silOpacity: 0.75,
+  silTint: 0.1,
+  aura: 0.6,
+  auraSize: 0.5,
+  auraSpeed: 0.5,
+};
+
 export interface ControlFrame {
   time: number;
   dt: number;
@@ -77,6 +100,7 @@ export interface ControlFrame {
    *  carries the visual continuity. */
   scene: number;
   gen: GenOverrides;
+  cam: CamParams;
 }
 
 export interface ScenePreset {

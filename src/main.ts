@@ -129,6 +129,7 @@ function tick(now: number) {
     camera: cameraState,
     trackErr: tracker.error ?? camera.error,
     video: media.videoSource?.element.currentTime.toFixed(1) ?? 'img',
+    sources: media.items.length,
     fps: Math.round(fpsAvg),
   }));
 

@@ -4,8 +4,8 @@
 // the feedback buffer carries the continuity. `hold` freezes the sequencer so
 // a scene can be studied.
 
-import type { AudioSignals, ControlFrame, GenOverrides, Macros, WaveState } from '../types';
-import { MACRO_NAMES } from '../types';
+import type { AudioSignals, CamParams, ControlFrame, GenOverrides, Macros, WaveState } from '../types';
+import { DEFAULT_CAM, MACRO_NAMES } from '../types';
 import { SCENES } from '../scenes/scenes';
 import { config } from '../config';
 
@@ -35,6 +35,9 @@ export class ControlBus {
 
   /** Generative-layer overrides, written by the panel, saved in presets. */
   gen: GenOverrides = { type: 0, speed: 0.5, zoom: 0.5, opacity: 0.5, video: 0.35 };
+
+  /** Performer-camera parameters, written by the panel, saved in presets. */
+  cam: CamParams = { ...DEFAULT_CAM };
 
   private scene = 0;
   private lastTurnIndex = -1;
@@ -101,6 +104,7 @@ export class ControlBus {
       wave: this.wave,
       scene: this.scene,
       gen: this.gen,
+      cam: this.cam,
     };
   }
 }
