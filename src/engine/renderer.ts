@@ -24,6 +24,7 @@ export class Engine {
   private presentMat: THREE.ShaderMaterial;
   private resScale: number;
   private paletteUniform: THREE.Vector3[];
+  private genTime = 0;
 
   constructor(canvas: HTMLCanvasElement, resScale: number, paletteColors: THREE.Vector3[]) {
     this.resScale = resScale;
@@ -52,11 +53,15 @@ export class Engine {
       uniforms: {
         uAspect: { value: new THREE.Vector2(1, 1) },
         uTime: { value: 0 },
+        uZoom: { value: 1 },
         uType: { value: 1 },
         uHue: { value: 0 },
         uEnergy: { value: 0 },
         uOnset: { value: 0 },
         uTurnProb: { value: 0.5 },
+        uVideo: { value: null },
+        uHasVideo: { value: 0 },
+        uVideoInf: { value: 0.35 },
       },
     });
 
@@ -100,8 +105,6 @@ export class Engine {
       fragmentShader: presentFragment,
       uniforms: {
         uFeedback: { value: null },
-        uMask: { value: null },
-        uHasMask: { value: 0 },
         uTime: { value: 0 },
         uAspect: { value: new THREE.Vector2(1, 1) },
         uPalette: { value: 0.5 },
@@ -143,27 +146,42 @@ export class Engine {
   setVideoTexture(tex: THREE.Texture | null) {
     this.flowMat.uniforms.uVideo.value = tex;
     this.flowMat.uniforms.uHasVideo.value = tex ? 1 : 0;
+    this.genMat.uniforms.uVideo.value = tex;
+    this.genMat.uniforms.uHasVideo.value = tex ? 1 : 0;
   }
 
   setMaskTexture(tex: THREE.Texture | null) {
     this.flowMat.uniforms.uMask.value = tex;
     this.flowMat.uniforms.uHasMask.value = tex ? 1 : 0;
-    this.presentMat.uniforms.uMask.value = tex;
-    this.presentMat.uniforms.uHasMask.value = tex ? 1 : 0;
   }
 
   render(frame: ControlFrame) {
     const preset = SCENES[frame.scene];
-    const genOn = preset.gen > 0 && preset.genMix + preset.genWarp > 0.001;
+    const ov = frame.gen;
+
+    // Overrides: a forced shader type turns the layer on even in scenes that
+    // ship without one; opacity 0.5 = the scene's own level, 0 = off, 1 = 2x.
+    const type = ov.type > 0 ? ov.type : preset.gen;
+    const opacity = ov.opacity * 2;
+    const baseMix = ov.type > 0 ? Math.max(preset.genMix, 0.5) : preset.genMix;
+    const baseWarp = ov.type > 0 ? Math.max(preset.genWarp, 0.3) : preset.genWarp;
+    const genMix = type > 0 ? baseMix * opacity : 0;
+    const genWarp = type > 0 ? baseWarp * opacity : 0;
+    const genOn = type > 0 && genMix + genWarp > 0.001;
+
+    // The layer keeps its own clock so the speed knob never jumps the phase.
+    this.genTime += frame.dt * Math.pow(4, (ov.speed - 0.5) * 2);
 
     if (genOn) {
       const gu = this.genMat.uniforms;
-      gu.uTime.value = frame.time;
-      gu.uType.value = preset.gen;
+      gu.uTime.value = this.genTime;
+      gu.uZoom.value = Math.pow(3, (0.5 - ov.zoom) * 2);
+      gu.uType.value = type;
       gu.uHue.value = rgbHue(this.paletteUniform[0]);
       gu.uEnergy.value = frame.audio.energy;
       gu.uOnset.value = frame.audio.onset;
       gu.uTurnProb.value = frame.wave.live ? frame.wave.turnProb : 0.6;
+      gu.uVideoInf.value = ov.video;
       this.renderer.setRenderTarget(this.genTarget);
       this.renderer.render(this.genScene, this.camera);
     }
@@ -187,8 +205,8 @@ export class Engine {
     fu.uVideoZoom.value = preset.videoZoom;
     fu.uHueShift.value = preset.hueShift;
     fu.uAbstraction.value = preset.abstraction;
-    fu.uGenMix.value = genOn ? preset.genMix : 0;
-    fu.uGenWarp.value = genOn ? preset.genWarp : 0;
+    fu.uGenMix.value = genOn ? genMix : 0;
+    fu.uGenWarp.value = genOn ? genWarp : 0;
     (fu.uAuraColor.value as THREE.Vector3).copy(this.paletteUniform[0]);
 
     const next = 1 - this.current;

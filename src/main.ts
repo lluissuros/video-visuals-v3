@@ -51,6 +51,9 @@ if (config.scene !== null && Number.isFinite(config.scene)) {
   bus.setScene(config.scene);
   bus.hold = true;
 }
+if (config.shader !== null && Number.isFinite(config.shader)) {
+  bus.gen.type = Math.min(6, Math.max(0, config.shader));
+}
 
 // --- camera / tracking prototype ---------------------------------------------
 const camera = new CameraSource();

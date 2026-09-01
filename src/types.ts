@@ -48,6 +48,25 @@ export interface WaveState {
   live: boolean;
 }
 
+/** Live overrides for the generative layer, adjustable from the panel and
+ *  saved in presets. All 0..1; 0.5 means "neutral" for the multipliers. */
+export interface GenOverrides {
+  /** 0 = use the scene's own shader; 1..6 pick one explicitly. */
+  type: number;
+  /** Time multiplier: 0 -> 0.25x, 0.5 -> 1x, 1 -> 4x. */
+  speed: number;
+  /** Spatial zoom: 0 -> 0.33x, 0.5 -> 1x, 1 -> 3x. */
+  zoom: number;
+  /** Multiplies the scene's genMix/genWarp: 0 -> off, 0.5 -> 1x, 1 -> 2x. */
+  opacity: number;
+  /** How much the source video tints and gates the fractal. */
+  video: number;
+}
+
+export const GEN_TYPE_NAMES = [
+  'escena', 'tunel', 'pliegue', 'kali', 'columnas', 'olas', 'orbita',
+];
+
 export interface ControlFrame {
   time: number;
   dt: number;
@@ -57,6 +76,7 @@ export interface ControlFrame {
   /** Active visual scene index. Changes are instant; the feedback buffer
    *  carries the visual continuity. */
   scene: number;
+  gen: GenOverrides;
 }
 
 export interface ScenePreset {

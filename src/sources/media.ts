@@ -52,11 +52,11 @@ export class MediaManager {
     this.watchDrops();
   }
 
-  select(item: MediaItem) {
+  select(item: MediaItem, startAt: number | null = null) {
     this.disposeCurrent();
     this.current = item;
     if (item.kind === 'video') {
-      this.video = new VideoSource(item.url);
+      this.video = new VideoSource(item.url, startAt);
       this.video.setSpeed(this.speed);
       this.onSource?.(this.video.texture, this.video.element);
     } else {
@@ -112,8 +112,32 @@ export class MediaManager {
     this.video?.setSpeed(rate);
   }
 
+  get speedRate(): number {
+    return this.speed;
+  }
+
   toggleLoop(lengthSeconds: number): boolean {
     return this.video?.toggleLoop(lengthSeconds) ?? false;
+  }
+
+  /** Change the loop length, live if a loop is running. */
+  setLoopLength(lengthSeconds: number) {
+    if (this.video) this.video.loopLength = lengthSeconds;
+  }
+
+  /** Restore a saved loop: seek there and start looping. */
+  applyLoop(start: number | null, length: number) {
+    if (!this.video) return;
+    this.video.loopLength = length;
+    this.video.loopStart = start;
+    if (start !== null) this.video.element.currentTime = start;
+  }
+
+  get loopState(): { start: number | null; length: number } {
+    return {
+      start: this.video?.loopStart ?? null,
+      length: this.video?.loopLength ?? 2,
+    };
   }
 
   private disposeCurrent() {

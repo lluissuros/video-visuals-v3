@@ -80,13 +80,18 @@ export class BodyTracker {
     const src: Float32Array = person.getAsFloat32Array();
     const sw = person.width;
     const sh = person.height;
+    // Smooth confidence, not a hard threshold: thresholding at the model's
+    // resolution is what made the silhouette read as pixelated staircases.
+    // A soft ramp around 0.5 keeps the edge fuzzy and the linear-filtered
+    // upsample does the rest.
     for (let y = 0; y < MASK_H; y++) {
       const sy = ((y * sh / MASK_H) | 0) * sw;
       const dy = y * MASK_W;
       for (let x = 0; x < MASK_W; x++) {
         let conf = src[sy + ((x * sw / MASK_W) | 0)];
         if (this.invert) conf = 1 - conf;
-        this.data[dy + x] = conf > 0.5 ? 255 : 0;
+        const soft = Math.min(1, Math.max(0, (conf - 0.35) / 0.3));
+        this.data[dy + x] = (soft * 255) | 0;
       }
     }
     for (const m of masks) m.close();

@@ -98,7 +98,8 @@ void main() {
   // wash: slow zoom into the feedback, so trails breathe outward
   displaced = (displaced - 0.5) * (1.0 - uWash * 0.006 - uLow * uPulse * 0.004) + 0.5;
 
-  vec3 prev = prevBlur(displaced, uBlur * 3.0);
+  // quadratic response, big top end: this diffusion compounds every frame
+  vec3 prev = prevBlur(displaced, uBlur * uBlur * 14.0);
 
   // feed: 0 -> fast fade, 1 -> near-infinite trails (never quite 1, or the
   // buffer saturates to white and stays there)
@@ -124,6 +125,14 @@ void main() {
     float levels = mix(64.0, 6.0, uAbstraction);
     vid = floor(vid * levels) / levels;
     vid = hueRotate(vid, uHueShift) * 1.35;
+    // performers enter HERE, as a source, so every later effect (fractal,
+    // kaleido, trails) flows over them instead of being punched through:
+    // inside the silhouette the injected image goes near-black with a breath
+    // of the palette color.
+    if (uHasMask > 0.5) {
+      float mBody = texture2D(uMask, uv).r;
+      vid = mix(vid, uAuraColor * 0.08, mBody * 0.9);
+    }
     float inj = uInject * (1.0 + uPulse * (uOnset * 2.5 + uEnergy))
               * (0.35 + uTurnProb * 0.65);
     acc = mix(acc, vid, clamp(inj, 0.0, 1.0));
@@ -139,16 +148,22 @@ void main() {
   }
 
   // --- performer aura -----------------------------------------------------
+  // A wide halo OUTSIDE the silhouette: the difference between a far-blurred
+  // read of the mask and the mask itself. Injected as light (mix, see above),
+  // then the flow drags it outward - big emanations, not a thin rim.
   if (uHasMask > 0.5) {
     float m = texture2D(uMask, uv).r;
-    // edge of the silhouette, a soft band
-    float e = 0.02;
-    float mR = texture2D(uMask, uv + vec2(e, 0.0)).r;
-    float mU = texture2D(uMask, uv + vec2(0.0, e)).r;
-    float edge = clamp(abs(m - mR) + abs(m - mU), 0.0, 1.0);
-    acc += uAuraColor * edge * (0.5 + uEnergy * uPulse * 2.0);
-    // inside the body, damp the buffer so the aura reads as coming FROM them
-    acc *= 1.0 - m * 0.35;
+    float far = 0.0;
+    for (int i = 0; i < 6; i++) {
+      float a = float(i) * 1.047;
+      far += texture2D(uMask, uv + vec2(cos(a), sin(a)) * 0.055).r;
+    }
+    far /= 6.0;
+    float halo = clamp(far - m * 1.2, 0.0, 1.0);
+    float glow = halo * (1.2 + uEnergy * uPulse * 3.0 + uOnset * uPulse * 2.0);
+    acc = mix(acc, uAuraColor * 2.5, clamp(glow * 0.35, 0.0, 1.0));
+    // and a slight damp inside the body so the figure stays legible
+    acc *= 1.0 - m * 0.25;
   }
 
   // safety: the buffer is float, nothing else stops a runaway

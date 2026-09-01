@@ -4,7 +4,7 @@
 // the feedback buffer carries the continuity. `hold` freezes the sequencer so
 // a scene can be studied.
 
-import type { AudioSignals, ControlFrame, Macros, WaveState } from '../types';
+import type { AudioSignals, ControlFrame, GenOverrides, Macros, WaveState } from '../types';
 import { MACRO_NAMES } from '../types';
 import { SCENES } from '../scenes/scenes';
 import { config } from '../config';
@@ -32,6 +32,9 @@ export class ControlBus {
 
   /** True: the sequencer is frozen, only manual changes switch scenes. */
   hold = false;
+
+  /** Generative-layer overrides, written by the panel, saved in presets. */
+  gen: GenOverrides = { type: 0, speed: 0.5, zoom: 0.5, opacity: 0.5, video: 0.35 };
 
   private scene = 0;
   private lastTurnIndex = -1;
@@ -97,6 +100,7 @@ export class ControlBus {
       audio: this.audio,
       wave: this.wave,
       scene: this.scene,
+      gen: this.gen,
     };
   }
 }

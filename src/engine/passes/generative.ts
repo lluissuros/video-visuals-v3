@@ -2,10 +2,13 @@
 // (tympanus.net/codrops "Rendering the Simulation Theory"): nested loops, trig
 // interference instead of noise, log-polar space for infinite zoom, HSV glow
 // accumulated along the ray. Written fresh here, tuned to be driven: uHue
-// follows the movie palette, uEnergy is the music.
+// follows the movie palette, uEnergy is the music, uVideoInf lets the source
+// video tint and gate the fractal so the two share shapes and colors.
 //
 // Output: rgb = light to inject into the feedback, a = scalar field the flow
 // pass uses to WARP the video sampling (this is what intertwines the two).
+//
+// Types: 1 tunel, 2 pliegue, 3 kali, 4 columnas, 5 olas, 6 orbita.
 
 import { NOISE } from './glsl';
 
@@ -14,12 +17,16 @@ precision highp float;
 varying vec2 vUv;
 
 uniform vec2 uAspect;
-uniform float uTime;
-uniform int uType;      // 1 tunel, 2 pliegue, 3 kali
+uniform float uTime;    // already speed-scaled on the CPU
+uniform float uZoom;    // spatial scale multiplier
+uniform int uType;
 uniform float uHue;     // base hue, from the extracted palette
 uniform float uEnergy;
 uniform float uOnset;
 uniform float uTurnProb;
+uniform sampler2D uVideo;
+uniform float uHasVideo;
+uniform float uVideoInf;
 
 ${NOISE}
 
@@ -72,16 +79,20 @@ vec4 pliegue(vec2 uv, float t) {
   return vec4(col, clamp(fieldAcc * 0.08, 0.0, 1.0));
 }
 
-// Kali IFS lace: 2D orbit trap, cheap and dense. More a living texture than a
-// space - the best of the three as a warp field.
+// Kali IFS lace, restless version: the constant orbits widely, every
+// iteration rotates by a time-varying angle, and the fold axis breathes -
+// the lace keeps destructuring instead of settling into leaded glass.
 vec4 kali(vec2 uv, float t) {
-  vec2 z = uv * (1.3 + 0.2 * sin(t * 0.043));
-  z *= rot2(t * 0.04);
-  vec2 c = vec2(0.84 + 0.09 * sin(t * 0.11), 0.62 + 0.07 * cos(t * 0.073));
+  vec2 z = uv * (1.1 + 0.45 * sin(t * 0.11));
+  z *= rot2(t * 0.07);
+  vec2 c = vec2(0.78 + 0.18 * sin(t * 0.23 + sin(t * 0.111) * 2.0),
+                0.56 + 0.17 * cos(t * 0.157));
+  float wob = 0.05 * sin(t * 0.19);
   float trap = 1e9, tr2 = 1e9;
   for (int i = 0; i < 13; i++) {
     z = abs(z) / max(dot(z, z), 1e-6) - c;
-    trap = min(trap, abs(z.y));
+    z *= rot2(wob + float(i) * 0.03 * sin(t * 0.083));
+    trap = min(trap, abs(z.y + 0.15 * sin(t * 0.29)));
     tr2 = min(tr2, length(z - vec2(0.3, 0.2)));
   }
   float v = exp(-trap * 6.0);
@@ -89,13 +100,96 @@ vec4 kali(vec2 uv, float t) {
   return vec4(col, v);
 }
 
+// Grid of folded towers scrolling past (after the 1-aug tweet): each cell
+// offsets by its own phase, box-folds carve the columns, glow at the walls.
+vec4 columnas(vec2 uv, float t) {
+  vec3 col = vec3(0.0);
+  float g = 0.3, e, fieldAcc = 0.0;
+  for (float i = 0.0; i < 70.0; i++) {
+    vec3 p = vec3(uv * g, g + t * 2.0);
+    vec2 n = floor(p.xz / 3.0);
+    p.xz -= n * 3.0 + 1.8;
+    p.y += 2.0 + sin(n.x + n.y * 1.571);
+    for (float j = 1.0; j < 6.0; j++)
+      p = abs(p + p) - vec3(0.6, 2.0 + j * 0.4, 1.0);
+    e = (abs(max(abs(p.x), max(abs(p.y), abs(p.z))) * 6.0 - 15.0) + 0.1) / 900.0;
+    g += e;
+    float hit = exp(-e * 2000.0);
+    col += hit * hsv(uHue + 0.06 + n.y * 0.02, 0.6, 0.014 + uEnergy * 0.01);
+    fieldAcc += hit;
+  }
+  col = tanh(col * 1.1) * 0.5;
+  return vec4(col, clamp(fieldAcc * 0.07, 0.0, 1.0));
+}
+
+// Wave terrain (after the 10-jul tweet): rotate2D per octave plus
+// sin-interference builds a horizon of breathing ridges.
+vec4 olas(vec2 uv, float t) {
+  vec3 col = vec3(0.0);
+  float e = 0.0, g = 0.2, s = 1.0, fieldAcc = 0.0;
+  for (float i = 0.0; i < 70.0; i++) {
+    vec3 p = vec3(uv * g, g);
+    p.y += 0.7;
+    e = p.y;
+    for (s = 1.0; s < 500.0; s += s) {
+      p.xz *= rot2(s);
+      e += abs(dot(sin(p.zx * s + t), vec2(0.1))) / s;
+    }
+    g += e * 1.4;
+    col += hsv(uv.y > 0.0 ? uHue + uv.y * 0.15 : uHue + 0.5,
+               0.35, max(min(e * s - 0.05, 0.45 - e), 0.0) / 70.0);
+    fieldAcc += e * 0.1;
+  }
+  col += hsv(uHue, 0.5, 1.0) * 0.05 / max(length(uv), 0.08);
+  col = tanh(col * 0.9) * 0.55;
+  return vec4(col, clamp(fieldAcc * 0.12, 0.0, 1.0));
+}
+
+// Orbiting folds (after the 13-aug tweet): the fold offset and the rotation
+// axis both cycle with time, so the body keeps reassembling itself.
+vec4 orbita(vec2 uv, float t) {
+  vec3 col = vec3(0.0);
+  float g = 0.3, e, fieldAcc = 0.0;
+  float sway = 1.0 + sin(t * 0.5) * 0.5;
+  mat3 M = rot3(1.5, normalize(vec3(1.0,
+    5.0 * smoothstep(sway, 2.5, sin(t * 0.5)) - 1.0,
+    sway - cos(t * 0.5))));
+  for (float i = 0.0; i < 65.0; i++) {
+    vec3 p = vec3(uv * g, g - 3.0);
+    for (int j = 1; j <= 8; j++) {
+      p = M * p;
+      p = abs(p + p + 0.5) - (0.7 + 0.4 * cos(t * 0.7 + float(j + j)));
+    }
+    e = (length(p.yz) - 1.0) / 500.0;
+    g += max(e, 1e-3);
+    float hit = exp(-max(e, 0.0) * 2500.0);
+    col += hit * hsv(uHue + 0.5 + g * 0.03, 0.7, 0.03 + uEnergy * 0.015);
+    fieldAcc += hit;
+  }
+  col = tanh(col * 1.4) * 0.55;
+  return vec4(col, clamp(fieldAcc * 0.07, 0.0, 1.0));
+}
+
 void main() {
-  vec2 uv = (vUv - 0.5) * uAspect * 2.0;
-  float t = uTime * (1.0 + uEnergy * 0.4) ;
+  vec2 uv = (vUv - 0.5) * uAspect * 2.0 * uZoom;
+  float t = uTime;
   vec4 g;
   if (uType == 1)      g = tunel(uv, t);
   else if (uType == 2) g = pliegue(uv, t);
-  else                 g = kali(uv, t);
+  else if (uType == 3) g = kali(uv, t);
+  else if (uType == 4) g = columnas(uv, t);
+  else if (uType == 5) g = olas(uv, t);
+  else                 g = orbita(uv, t);
+
+  // The source video tints the fractal and gates its brightness, so the
+  // film's colors and shapes read through the generative light.
+  if (uHasVideo > 0.5 && uVideoInf > 0.001) {
+    vec3 vid = texture2D(uVideo, vUv).rgb;
+    float vl = dot(vid, vec3(0.299, 0.587, 0.114));
+    g.rgb *= mix(vec3(1.0), vid * 2.2 + 0.15, uVideoInf);
+    g.rgb *= mix(1.0, 0.25 + 1.75 * vl, uVideoInf * 0.8);
+  }
+
   // onset flashes the layer a touch
   g.rgb *= 0.75 + uTurnProb * 0.5 + uOnset * 0.6;
   gl_FragColor = g;

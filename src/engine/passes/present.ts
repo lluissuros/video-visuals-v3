@@ -9,8 +9,6 @@ precision highp float;
 varying vec2 vUv;
 
 uniform sampler2D uFeedback;
-uniform sampler2D uMask;
-uniform float uHasMask;
 uniform float uTime;
 uniform vec2 uAspect;
 
@@ -81,13 +79,6 @@ void main() {
   // saturation: 0 -> grayscale, 0.29 -> neutral, 1 -> violent
   float l2 = dot(c, vec3(0.299, 0.587, 0.114));
   c = mix(vec3(l2), c, uSat * 3.5);
-
-  // performers: keep them dark holes with a warm rim (the aura around them is
-  // already in the feedback)
-  if (uHasMask > 0.5) {
-    float m = texture2D(uMask, uv).r;
-    c *= 1.0 - m * 0.85;
-  }
 
   // vignette
   vec2 dv = uv - 0.5;

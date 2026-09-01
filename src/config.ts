@@ -26,4 +26,6 @@ export const config = {
   clockSceneSeconds: 45,
   /** ?scene=N forces a scene (1-based) and starts with HOLD on. */
   scene: q.get('scene') !== null ? Number(q.get('scene')) - 1 : null,
+  /** ?shader=N forces a generative shader (1-6) on top of any scene. */
+  shader: q.get('shader') !== null ? Number(q.get('shader')) : null,
 };

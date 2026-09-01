@@ -12,7 +12,7 @@ export class VideoSource {
   loopLength = 2;
   private nudge: number;
 
-  constructor(url: string, randomSeek = true) {
+  constructor(url: string, startAt: number | null = null) {
     const v = document.createElement('video');
     v.src = url;
     v.muted = true;
@@ -30,9 +30,10 @@ export class VideoSource {
       // Never open on the clip's title card: start somewhere inside it.
       // ?seek=<seconds> pins it for reproducible tests.
       const seek = new URLSearchParams(location.search).get('seek');
-      if (Number.isFinite(v.duration) && v.duration > 10) {
+      if (startAt !== null) v.currentTime = startAt;
+      else if (Number.isFinite(v.duration) && v.duration > 10) {
         if (seek !== null) v.currentTime = Number(seek);
-        else if (randomSeek) v.currentTime = (0.05 + Math.random() * 0.85) * v.duration;
+        else v.currentTime = (0.05 + Math.random() * 0.85) * v.duration;
       }
     });
     v.addEventListener('canplay', () => {
