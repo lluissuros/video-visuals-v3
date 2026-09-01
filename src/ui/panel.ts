@@ -29,7 +29,7 @@ const HELP_LINES: [string, string][] = [
   ['h', 'esconde / muestra este panel'],
   ['i', 'estas instrucciones'],
   ['f', 'fullscreen (para el proyector)'],
-  ['1-6', 'fuerza una escena'],
+  ['1-8', 'fuerza una escena'],
   ['espacio', 'siguiente escena'],
   ['p', 'HOLD: congela el secuenciador de escenas para estudiar una'],
   ['l', 'loopea el vídeo desde este momento (otra vez: suelta)'],
@@ -41,7 +41,7 @@ const MACRO_HELP: Record<keyof Macros, string> = {
   flow: 'cuánto arrastra el campo de flujo la imagen',
   feed: 'persistencia de las estelas (arriba = nunca se borra)',
   wash: 'zoom lento hacia dentro, respiración',
-  blur: 'difusión, ahora con mucho más recorrido',
+  blur: 'difuminado al FINAL de la cadena, hasta niebla total (el grano va después)',
   palette: 'cuánto se pegan los colores a la paleta extraída del vídeo',
   sat: 'saturación (0.29 = neutral, arriba = violenta)',
   pulse: 'cuánto manda el audio en todo lo demás',
@@ -437,7 +437,8 @@ export class Panel {
       <h2>teclas</h2><table>${keyRows}</table>
       <h2>shader (capa generativa)</h2>
       <p>El desplegable fuerza un shader (túnel, pliegue, kali, columnas, olas,
-      órbita) sobre cualquier escena; «escena» usa el de la escena activa.</p>
+      órbita, vidrio, solar) sobre cualquier escena; «escena» usa el de la
+      escena activa.</p>
       <table>${genRows}</table>
       <h2>macros</h2><table>${macroRows}</table>
       <h2>escenas</h2><table>${sceneRows}</table>
@@ -497,5 +498,7 @@ function sceneBlurb(i: number): string {
     'filamentos fractales trenzados con el vídeo',
     'generativo puro: el túnel, teñido por el vídeo',
     'casi quieto, encaje kali inquieto debajo',
+    'lentes de vidrio: bandas refractadas cruzando la película',
+    'granulación solar: chispas por píxel, partículas sin partículas',
   ][i] ?? '';
 }

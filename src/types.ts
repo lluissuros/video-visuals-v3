@@ -65,6 +65,7 @@ export interface GenOverrides {
 
 export const GEN_TYPE_NAMES = [
   'escena', 'tunel', 'pliegue', 'kali', 'columnas', 'olas', 'orbita',
+  'vidrio', 'solar',
 ];
 
 /** Performer-camera parameters, adjustable from the panel, saved in presets.

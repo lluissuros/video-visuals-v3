@@ -114,8 +114,9 @@ void main() {
     displaced += gm * (0.002 + uAuraSpeed * 0.008);
   }
 
-  // quadratic response, big top end: this diffusion compounds every frame
-  vec3 prev = prevBlur(displaced, uBlur * uBlur * 14.0);
+  // A LITTLE in-loop diffusion still compounds into melt, but the blur macro
+  // mainly drives the end-of-chain kawase blur now - so this stays subtle.
+  vec3 prev = prevBlur(displaced, uBlur * uBlur * 4.0);
 
   // feed: 0 -> fast fade, 1 -> near-infinite trails (never quite 1, or the
   // buffer saturates to white and stays there)

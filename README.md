@@ -34,7 +34,7 @@ One-time, only for the performer-tracking prototype:
 
 ## Keys (also under `i` in the app)
 
-`h` panel · `i` instructions · `f` fullscreen · `1-6` force scene ·
+`h` panel · `i` instructions · `f` fullscreen · `1-8` force scene ·
 `space` next scene · `p` hold (freeze the scene sequencer) ·
 `l` loop the last ~2 s of video · `m` camera-mask debug view
 
@@ -43,14 +43,15 @@ One-time, only for the performer-tracking prototype:
 - **fuente** — source selector, playback speed (0.06x-2x), loop length +
   loop button, camera on/off.
 - **shader** — force any generative shader (tunel, pliegue, kali, columnas,
-  olas, orbita) over any scene, with speed / zoom / opacity knobs and a
+  olas, orbita, vidrio, solar) over any scene, with speed / zoom / opacity knobs and a
   `video` knob that recolors the fractal with the film's chroma and lets its
   shapes surface (needs opacity > 0 to be visible).
 - **cámara** — `silueta` (body presence, 0 = invisible), `tinte` (dark body
   vs aura-colored), `aura` (emanation strength), `tamaño` (halo reach),
   `emanar` (speed of the color waves leaving the body).
 - **macros** — `flow` (drag), `feed` (trails), `wash` (zoom drift), `blur`
-  (diffusion, big range), `palette` (snap to extracted colors), `sat`
+  (end-of-chain dual-kawase blur, up to full fog; grain stays on top),
+  `palette` (snap to extracted colors), `sat`
   (0.29 = neutral), `pulse` (audio depth), `grain`. Each has a `midi`
   button: click, move a knob, done. Mappings persist per browser.
 - **presets** — save / load / copy / paste / delete. A preset captures scene,
@@ -65,6 +66,10 @@ One-time, only for the performer-tracking prototype:
 4. `cueva` — folded-fractal filaments braided with the film
 5. `puro` — generative only: the interference tunnel, tinted by the video
 6. `respira` — near-still washes, restless kali lace warping underneath
+7. `vidrio` — glass lenses refracting rainbow bands across the film
+   (after XorDev's "Glass", CC-BY-4.0)
+8. `grano` — solar granulation: shimmering per-pixel sparks, particle-like
+   (after XorDev's "Solar", CC-BY-4.0)
 
 With the granulizer connected each song's turn selects a scene in series;
 without it they advance on a timer. `p` freezes them for study.
@@ -76,8 +81,9 @@ without it they advance on a timer. `p` freezes them for study.
 | `video` | `/media/almodovar-red.mp4` | source (video or image) |
 | `structure` | `sim` | `gz` (granulizer bridge) / `sim` (fake) / `clock` |
 | `ws` | `localhost:8765` | granulizer bridge host, for `structure=gz` |
-| `scene` | — | force a scene (1-6) and start with HOLD on |
-| `shader` | — | force a generative shader (1-6) on top of the scene |
+| `scene` | — | force a scene (1-8) and start with HOLD on |
+| `shader` | — | force a generative shader (1-8) on top of the scene |
+| any macro | — | preset a macro slider: `?blur=0.8&feed=0.9` … |
 | `audio` | `1` | external audio analysis |
 | `camera` | off | `1` starts the tracking prototype on load |
 | `res` | `1` | feedback buffer scale; drop to `0.5` on the M1 if fps suffers |

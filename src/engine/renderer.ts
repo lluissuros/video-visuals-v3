@@ -7,7 +7,9 @@ import * as THREE from 'three';
 import type { ControlFrame } from '../types';
 import { SCENES } from '../scenes/scenes';
 import { flowVertex, flowFragment } from './passes/flow';
-import { presentFragment } from './passes/present';
+import {
+  presentFragment, kawaseDownFragment, kawaseUpFragment, finalFragment,
+} from './passes/present';
 import { genFragment } from './passes/generative';
 
 export class Engine {
@@ -15,13 +17,22 @@ export class Engine {
   private scene = new THREE.Scene();
   private genScene = new THREE.Scene();
   private presentScene = new THREE.Scene();
+  private blurScene = new THREE.Scene();
+  private finalScene = new THREE.Scene();
   private camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
   private targets: [THREE.WebGLRenderTarget, THREE.WebGLRenderTarget];
   private genTarget: THREE.WebGLRenderTarget;
+  private sceneTarget: THREE.WebGLRenderTarget;
+  private downs: THREE.WebGLRenderTarget[];
+  private ups: THREE.WebGLRenderTarget[];
   private current = 0;
   private flowMat: THREE.ShaderMaterial;
   private genMat: THREE.ShaderMaterial;
   private presentMat: THREE.ShaderMaterial;
+  private downMat: THREE.ShaderMaterial;
+  private upMat: THREE.ShaderMaterial;
+  private finalMat: THREE.ShaderMaterial;
+  private blurMesh: THREE.Mesh;
   private resScale: number;
   private paletteUniform: THREE.Vector3[];
   private genTime = 0;
@@ -46,6 +57,10 @@ export class Engine {
       });
     this.targets = [mk(), mk()];
     this.genTarget = mk();
+    this.sceneTarget = mk();
+    // dual-kawase pyramid: 1/2, 1/4, 1/8, 1/16 down, then back up to 1/2
+    this.downs = [mk(), mk(), mk(), mk()];
+    this.ups = [mk(), mk(), mk()];
 
     this.genMat = new THREE.ShaderMaterial({
       vertexShader: flowVertex,
@@ -114,7 +129,6 @@ export class Engine {
         uAspect: { value: new THREE.Vector2(1, 1) },
         uPalette: { value: 0.5 },
         uSat: { value: 0.36 },
-        uGrain: { value: 0.2 },
         uPulse: { value: 0.5 },
         uEnergy: { value: 0 },
         uOnset: { value: 0 },
@@ -124,10 +138,40 @@ export class Engine {
       },
     });
 
+    const kawaseUniforms = () => ({
+      uTex: { value: null as THREE.Texture | null },
+      uTexel: { value: new THREE.Vector2(1 / 2, 1 / 2) },
+      uOffset: { value: 1 },
+    });
+    this.downMat = new THREE.ShaderMaterial({
+      vertexShader: flowVertex,
+      fragmentShader: kawaseDownFragment,
+      uniforms: kawaseUniforms(),
+    });
+    this.upMat = new THREE.ShaderMaterial({
+      vertexShader: flowVertex,
+      fragmentShader: kawaseUpFragment,
+      uniforms: kawaseUniforms(),
+    });
+    this.finalMat = new THREE.ShaderMaterial({
+      vertexShader: flowVertex,
+      fragmentShader: finalFragment,
+      uniforms: {
+        uScene: { value: null },
+        uBlur: { value: null },
+        uBlurMix: { value: 0 },
+        uGrain: { value: 0.2 },
+        uTime: { value: 0 },
+      },
+    });
+
     const quad = new THREE.PlaneGeometry(2, 2);
     this.scene.add(new THREE.Mesh(quad, this.flowMat));
     this.genScene.add(new THREE.Mesh(quad, this.genMat));
     this.presentScene.add(new THREE.Mesh(quad, this.presentMat));
+    this.blurMesh = new THREE.Mesh(quad, this.downMat);
+    this.blurScene.add(this.blurMesh);
+    this.finalScene.add(new THREE.Mesh(quad, this.finalMat));
 
     this.resize();
     window.addEventListener('resize', () => this.resize());
@@ -141,6 +185,15 @@ export class Engine {
     const fh = Math.max(2, Math.round(h * this.resScale));
     this.targets.forEach((t) => t.setSize(fw, fh));
     this.genTarget.setSize(fw, fh);
+    this.sceneTarget.setSize(w, h);
+    this.downs.forEach((t, i) => {
+      const s = 2 ** (i + 1);
+      t.setSize(Math.max(2, Math.round(w / s)), Math.max(2, Math.round(h / s)));
+    });
+    this.ups.forEach((t, i) => {
+      const s = 2 ** (this.ups.length - i);
+      t.setSize(Math.max(2, Math.round(w / s)), Math.max(2, Math.round(h / s)));
+    });
     const aspect = w / h;
     (this.flowMat.uniforms.uAspect.value as THREE.Vector2).set(aspect, 1);
     (this.genMat.uniforms.uAspect.value as THREE.Vector2).set(aspect, 1);
@@ -229,14 +282,47 @@ export class Engine {
     pu.uTime.value = frame.time;
     pu.uPalette.value = frame.macros.palette;
     pu.uSat.value = frame.macros.sat;
-    pu.uGrain.value = frame.macros.grain;
     pu.uPulse.value = frame.macros.pulse;
     pu.uEnergy.value = frame.audio.energy;
     pu.uOnset.value = frame.audio.onset;
     pu.uKaleido.value = preset.kaleido;
     pu.uKaleidoSpin.value = preset.kaleidoSpin;
-    this.renderer.setRenderTarget(null);
+    this.renderer.setRenderTarget(this.sceneTarget);
     this.renderer.render(this.presentScene, this.camera);
+
+    // End-of-chain blur: dual-kawase pyramid, offset and mix from the macro.
+    const blur = frame.macros.blur;
+    let blurTex: THREE.Texture = this.sceneTarget.texture;
+    if (blur > 0.01) {
+      const offset = 0.5 + blur * 1.8;
+      const run = (
+        mat: THREE.ShaderMaterial, src: THREE.Texture, dst: THREE.WebGLRenderTarget,
+      ) => {
+        this.blurMesh.material = mat;
+        mat.uniforms.uTex.value = src;
+        (mat.uniforms.uTexel.value as THREE.Vector2)
+          .set(1 / dst.width, 1 / dst.height);
+        mat.uniforms.uOffset.value = offset;
+        this.renderer.setRenderTarget(dst);
+        this.renderer.render(this.blurScene, this.camera);
+        return dst.texture;
+      };
+      let src = this.sceneTarget.texture;
+      for (const t of this.downs) src = run(this.downMat, src, t);
+      for (const t of this.ups) src = run(this.upMat, src, t);
+      blurTex = src;
+    }
+
+    // Final pass: blend sharp/cloudy, grain last, to screen.
+    const fin = this.finalMat.uniforms;
+    fin.uScene.value = this.sceneTarget.texture;
+    fin.uBlur.value = blurTex;
+    // gentle at the bottom, full cloud at the top
+    fin.uBlurMix.value = Math.min(1, Math.pow(blur, 1.6) * 1.35);
+    fin.uGrain.value = frame.macros.grain;
+    fin.uTime.value = frame.time;
+    this.renderer.setRenderTarget(null);
+    this.renderer.render(this.finalScene, this.camera);
   }
 }
 

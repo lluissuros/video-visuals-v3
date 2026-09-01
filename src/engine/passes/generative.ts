@@ -8,7 +8,9 @@
 // Output: rgb = light to inject into the feedback, a = scalar field the flow
 // pass uses to WARP the video sampling (this is what intertwines the two).
 //
-// Types: 1 tunel, 2 pliegue, 3 kali, 4 columnas, 5 olas, 6 orbita.
+// Types: 1 tunel, 2 pliegue, 3 kali, 4 columnas, 5 olas, 6 orbita,
+// 7 vidrio, 8 solar (7 and 8 after XorDev's "Glass" and "Solar", CC-BY-4.0,
+// fragcoord.xyz/s/gwznloxf and /s/stpng88o).
 
 import { NOISE } from './glsl';
 
@@ -170,6 +172,39 @@ vec4 orbita(vec2 uv, float t) {
   return vec4(col, clamp(fieldAcc * 0.07, 0.0, 1.0));
 }
 
+// Glass lenses (after XorDev's "Glass", CC-BY-4.0): phase-shifted sine bands
+// refracted through two drifting circles that merge like glass blobs - the
+// sphere de-emphasized into lenses that keep crossing the frame.
+vec4 vidrio(vec2 uv, float t) {
+  vec2 c1 = vec2(sin(t * 0.11), cos(t * 0.07)) * 0.55;
+  vec2 c2 = vec2(cos(t * 0.05 + 2.0), sin(t * 0.13) - 0.2) * 0.7;
+  float l1 = length(uv - c1) - 1.0;
+  float l2 = length(uv - c2) - 0.65;
+  float h = clamp(0.5 + 0.5 * (l2 - l1) / 0.5, 0.0, 1.0);
+  float l = mix(l2, l1, h) - 0.5 * h * (1.0 - h);   // smooth union
+  float inside = max(1.0, -l * 8.0);
+  vec3 bands = 0.5 + 0.5 * tanh(0.1 / max(abs(l) * 8.0, 0.02)
+             - sin(l * 4.0 + uv.y * inside + t + vec3(0.0, 1.0, 2.0)));
+  vec3 col = hueRotate(bands, uHue * 6.2832) * (0.3 + uEnergy * 0.25);
+  float field = exp(-abs(l) * 2.5) * 0.8 + bands.g * 0.2;
+  return vec4(col, clamp(field, 0.0, 1.0));
+}
+
+// Solar grain (after XorDev's "Solar", CC-BY-4.0): a per-pixel trig hash
+// divides the light, so the halo is made of shimmering grains instead of
+// smooth gradients - particle-like without particles.
+vec4 solar(vec2 uv, float t) {
+  vec2 c = vec2(sin(t * 0.09), cos(t * 0.12)) * 0.5;
+  float l = 1.1 - length(uv - c);
+  float grano = exp(mod(dot(gl_FragCoord.xy, sin(gl_FragCoord.yx)) + t * 1.5, 2.0)
+              + sin(t + sin(t / 0.6 + uv.y)));
+  vec3 tint = hsv(uHue, 0.7, 1.0) + vec3(0.25, 0.1, 0.05);
+  vec3 col = tanh(tint * (0.8 + uEnergy * 1.5)
+             / max(max(l, -l * 10.0), 0.04) / grano);
+  float field = clamp(l, 0.0, 1.0) * 0.6 + exp(-grano) * 0.3;
+  return vec4(col * 0.55, clamp(field, 0.0, 1.0));
+}
+
 void main() {
   vec2 uv = (vUv - 0.5) * uAspect * 2.0 * uZoom;
   float t = uTime;
@@ -179,7 +214,9 @@ void main() {
   else if (uType == 3) g = kali(uv, t);
   else if (uType == 4) g = columnas(uv, t);
   else if (uType == 5) g = olas(uv, t);
-  else                 g = orbita(uv, t);
+  else if (uType == 6) g = orbita(uv, t);
+  else if (uType == 7) g = vidrio(uv, t);
+  else                 g = solar(uv, t);
 
   // The source video recolors the fractal with its own chroma (independent
   // of brightness, so a dark film still tints instead of just dimming) and

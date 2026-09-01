@@ -15,6 +15,7 @@ import { BodyTracker } from './tracking/bodyTracking';
 import { Engine } from './engine/renderer';
 import { Panel, type PanelStatus } from './ui/panel';
 import { SCENES } from './scenes/scenes';
+import { GEN_TYPE_NAMES, MACRO_NAMES } from './types';
 import { snapTick } from './debug/snap';
 
 const canvas = document.getElementById('view') as HTMLCanvasElement;
@@ -52,7 +53,15 @@ if (config.scene !== null && Number.isFinite(config.scene)) {
   bus.hold = true;
 }
 if (config.shader !== null && Number.isFinite(config.shader)) {
-  bus.gen.type = Math.min(6, Math.max(0, config.shader));
+  bus.gen.type = Math.min(GEN_TYPE_NAMES.length - 1, Math.max(0, config.shader));
+}
+// Any macro can be preset from the URL: ?blur=0.8&feed=0.9 ...
+{
+  const q = new URLSearchParams(location.search);
+  for (const name of MACRO_NAMES) {
+    const v = q.get(name);
+    if (v !== null) bus.setMacro(name, Number(v));
+  }
 }
 
 // --- camera / tracking prototype ---------------------------------------------

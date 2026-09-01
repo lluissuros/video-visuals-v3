@@ -92,4 +92,32 @@ export const SCENES: ScenePreset[] = [
     genMix: 0.15,
     genWarp: 0.35,
   },
+  {
+    ...base,
+    name: 'vidrio',      // glass lenses refracting rainbow bands over the film
+    flowScale: 1.0,
+    flowSpeed: 0.07,
+    swirl: 0.1,
+    inject: 0.08,
+    videoZoom: 1.4,
+    hueShift: 0.05,
+    abstraction: 0.5,
+    gen: 7,
+    genMix: 0.7,
+    genWarp: 0.5,
+  },
+  {
+    ...base,
+    name: 'grano',       // solar granulation: shimmering per-pixel sparks
+    flowScale: 1.8,
+    flowSpeed: 0.12,
+    swirl: -0.1,
+    inject: 0.06,
+    videoZoom: 1.5,
+    hueShift: 0.0,
+    abstraction: 0.6,
+    gen: 8,
+    genMix: 0.8,
+    genWarp: 0.3,
+  },
 ];
