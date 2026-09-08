@@ -165,13 +165,18 @@ export class Panel {
     this.presetSel = document.createElement('select');
     this.presetSel.title = 'presets guardados, las escenas: elegir uno lo carga (teclas 1-9, espacio)';
     this.presetSel.addEventListener('change', () => bus.setPreset(this.presetSel.selectedIndex));
-    presetRow.append(
-      this.presetSel,
+    presetRow.append(this.presetSel);
+    this.root.appendChild(presetRow);
+    const presetBtns = document.createElement('div');
+    presetBtns.className = 'btn-row';
+    presetBtns.append(
       this.button('save', 'guarda el estado actual con nombre nuevo', () => this.savePreset()),
       this.button('update', 'sobrescribe el preset elegido con el estado actual',
         () => this.updatePreset()),
+      this.button('rename', 'cambia el nombre del preset elegido', () => this.renamePreset()),
+      this.button('remove', 'borra el preset elegido', () => this.removePreset()),
     );
-    this.root.appendChild(presetRow);
+    this.root.appendChild(presetBtns);
     bus.onPreset = (i) => {
       const p = this.store.presets[i];
       if (!p) return;
@@ -575,6 +580,29 @@ export class Panel {
     if (!this.store.get(name)) return;
     this.store.save(this.capturePreset(name));
     this.refreshPresets(name);
+  }
+
+  private renamePreset() {
+    const from = this.presetSel.value;
+    if (!this.store.get(from)) return;
+    const to = window.prompt('nuevo nombre:', from)?.trim();
+    if (!to || to === from) return;
+    if (!this.store.rename(from, to)) {
+      window.alert(`ya hay un preset llamado «${to}»`);
+      return;
+    }
+    this.refreshPresets(to);
+  }
+
+  /** Drops the selected preset; the one now in its slot becomes active. */
+  private removePreset() {
+    const name = this.presetSel.value;
+    if (!this.store.get(name)) return;
+    if (!window.confirm(`¿borrar el preset «${name}»?`)) return;
+    const i = this.presetSel.selectedIndex;
+    this.store.remove(name);
+    this.refreshPresets();
+    if (this.store.presets.length > 0) this.bus.setPreset(i);
   }
 
   /** Bus state + source from a preset. Called by the bus for keys, dropdown

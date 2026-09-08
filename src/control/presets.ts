@@ -71,6 +71,20 @@ export class PresetStore {
     return this.presets.find((p) => p.name === name);
   }
 
+  remove(name: string) {
+    this.presets = this.presets.filter((p) => p.name !== name);
+    this.persist();
+  }
+
+  /** Fails (false) when `to` is taken by another preset. */
+  rename(from: string, to: string): boolean {
+    const p = this.get(from);
+    if (!p || (to !== from && this.get(to))) return false;
+    p.name = to;
+    this.persist();
+    return true;
+  }
+
   private persist() {
     try {
       localStorage.setItem(STORE_KEY, JSON.stringify(this.presets));
