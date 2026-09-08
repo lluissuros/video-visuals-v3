@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <title>vv3 · cámara</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #000; color: #ddd;
+      font: 15px/1.5 ui-monospace, Menlo, monospace; -webkit-text-size-adjust: 100%; }
+    body { display: flex; flex-direction: column; padding: 16px; box-sizing: border-box; gap: 12px; }
+    .title { color: #f55; letter-spacing: 0.08em; }
+    video { width: 100%; aspect-ratio: 16 / 9; background: #111; border-radius: 8px; object-fit: cover; }
+    label { display: flex; align-items: center; gap: 8px; color: #aaa; }
+    label span { width: 72px; }
+    label span.val { width: 44px; text-align: right; color: #7a7; }
+    input, select { flex: 1; background: #1a1a1e; color: #ddd; border: 1px solid #333;
+      border-radius: 6px; padding: 8px; font: inherit; }
+    button { background: #222; color: #ccc; border: 1px solid #444; border-radius: 8px;
+      padding: 14px; font: inherit; font-size: 16px; }
+    button.big { background: #611; color: #fdd; border-color: #a33; }
+    button.on { background: #262; color: #cfc; border-color: #4a4; }
+    .row { display: flex; gap: 8px; }
+    .row button { flex: 1; }
+    .status { color: #7a7; min-height: 1.5em; }
+    .status.bad { color: #c66; }
+    #pad { position: relative; width: 100%; aspect-ratio: 1; background: #111; border: 1px solid #333;
+      border-radius: 8px; touch-action: none; user-select: none; -webkit-user-select: none;
+      background-image: linear-gradient(#222 1px, transparent 1px), linear-gradient(90deg, #222 1px, transparent 1px);
+      background-size: 25% 25%; }
+    #pad .knob { position: absolute; width: 28px; height: 28px; margin: -14px; border-radius: 50%;
+      background: #f55; box-shadow: 0 0 12px #f55; pointer-events: none; }
+    #pad .axis { position: absolute; color: #666; font-size: 12px; pointer-events: none; }
+    #pad .axis.x { right: 8px; bottom: 6px; }
+    #pad .axis.y { left: 8px; top: 6px; }
+    .pad-vals { display: flex; justify-content: space-between; color: #7a7; }
+    small { color: #666; }
+    details summary { color: #888; cursor: pointer; }
+    a { color: #f88; }
+  </style>
+</head>
+<body>
+  <div class="title">video-visuals-v3 · cámara del móvil</div>
+  <video id="preview" muted playsinline autoplay></video>
+  <label><span>nombre</span><input id="name" maxlength="24" /></label>
+  <label><span>calidad</span>
+    <select id="quality"><option value="1280">720p</option><option value="640">360p</option><option value="1920">1080p</option></select>
+  </label>
+  <label id="zoom-row" hidden><span>zoom</span><input type="range" id="zoom" /><span id="zoom-val" class="val"></span></label>
+  <button id="start" class="big">enviar cámara</button>
+  <div class="row">
+    <button id="flip">girar cámara</button>
+    <button id="wide" hidden>gran angular</button>
+  </div>
+  <div id="pad">
+    <span class="axis y">sat ↑</span><span class="axis x">palette →</span>
+    <div class="knob" id="knob"></div>
+  </div>
+  <div class="pad-vals"><span id="pad-sat">sat</span><span id="pad-pal">palette</span></div>
+  <div id="status" class="status">conectando…</div>
+  <small>Apaisado (horizontal) para que la imagen llene la pantalla. Deja la página
+    delante: al fondo, el móvil corta la cámara. El cuadrado manda palette (→) y
+    saturación (↑) a las pantallas, con o sin cámara.</small>
+  <details><summary>¿El navegador avisa de conexión no segura?</summary>
+    <small>Instala una vez el <a href="/ca.crt">certificado</a> y no volverá a avisar
+      (ningún navegador, tampoco Arc).<br>
+      <b>Android:</b> descarga, luego Ajustes → Seguridad → Cifrado y credenciales →
+      Instalar un certificado → Certificado de CA → elige el archivo. El aviso
+      «la red puede estar supervisada» es normal.<br>
+      <b>iPhone:</b> ábrelo en Safari → Permitir → Ajustes → Perfil descargado →
+      Instalar. Después Ajustes → General → Información → Config. de confianza de
+      certificados → activa «video-visuals phone-cam CA».</small>
+  </details>
+
+<script type="module">
+// Phone side of the link: capture the camera, send it to every screen (the
+// visuals page) the signaling server knows about, one RTCPeerConnection per
+// screen. LAN only: no STUN/TURN, host candidates are enough.
+
+const $ = (id) => document.getElementById(id);
+const ua = navigator.userAgent;
+const defaultName = /iPhone|iPad/.test(ua) ? 'iphone' : /Android/.test(ua) ? 'android' : 'movil';
+const store = (k, v) => { try { v === undefined ? 0 : localStorage.setItem(k, v); return localStorage.getItem(k); } catch { return null; } };
+
+const id = store('vv3-phone-id') ?? store('vv3-phone-id', Math.random().toString(36).slice(2, 10));
+$('name').value = store('vv3-phone-name') ?? defaultName;
+$('name').addEventListener('change', () => { store('vv3-phone-name', $('name').value); hello(); });
+
+let ws = null;
+let stream = null;
+let screens = [];
+/** @type {Map<string, RTCPeerConnection>} */
+const pcs = new Map();
+let wakeLock = null;
+
+const setStatus = (text, bad = false) => {
+  $('status').textContent = text;
+  $('status').className = 'status' + (bad ? ' bad' : '');
+};
+
+// --- signaling ------------------------------------------------------------------
+function connect() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  ws = new WebSocket(`${proto}://${location.host}/signal`);
+  ws.onopen = hello;
+  ws.onclose = () => { setStatus('sin conexión con el servidor, reintentando…', true); setTimeout(connect, 1500); };
+  ws.onerror = () => ws.close();
+  ws.onmessage = async (ev) => {
+    const msg = JSON.parse(ev.data);
+    if (msg.type === 'screens') {
+      screens = msg.screens;
+      for (const [sid, pc] of pcs) if (!screens.includes(sid)) { pc.close(); pcs.delete(sid); }
+      if (stream) for (const sid of screens) if (!pcs.has(sid)) offer(sid);
+      report();
+    } else if (msg.type === 'answer') {
+      await pcs.get(msg.from)?.setRemoteDescription(msg.sdp);
+    } else if (msg.type === 'ice' && msg.candidate) {
+      await pcs.get(msg.from)?.addIceCandidate(msg.candidate).catch(() => {});
+    } else if (msg.type === 'macros') {
+      followPad(msg.values);
+    }
+  };
+}
+const send = (msg) => { if (ws?.readyState === 1) ws.send(JSON.stringify(msg)); };
+const hello = () => send({ type: 'hello', role: 'phone', id, name: $('name').value || defaultName });
+
+// --- peer connections -----------------------------------------------------------
+async function offer(screenId) {
+  const pc = new RTCPeerConnection({ iceServers: [] });
+  pcs.set(screenId, pc);
+  const track = stream.getVideoTracks()[0];
+  track.contentHint = 'motion';
+  const sender = pc.addTransceiver(track, { direction: 'sendonly', streams: [stream] }).sender;
+  pc.onicecandidate = (ev) => { if (ev.candidate) send({ type: 'ice', to: screenId, candidate: ev.candidate }); };
+  pc.onconnectionstatechange = () => {
+    report();
+    if (pc.connectionState === 'connected') raiseBitrate(sender);
+    if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+      pc.close();
+      if (pcs.get(screenId) === pc) {
+        pcs.delete(screenId);
+        if (stream && screens.includes(screenId)) setTimeout(() => offer(screenId), 1000);
+      }
+    }
+  };
+  await pc.setLocalDescription(await pc.createOffer());
+  send({ type: 'offer', to: screenId, sdp: pc.localDescription });
+}
+
+async function raiseBitrate(sender) {
+  try {
+    const p = sender.getParameters();
+    if (!p.encodings?.length) p.encodings = [{}];
+    p.encodings[0].maxBitrate = 6_000_000;
+    p.degradationPreference = 'balanced';
+    await sender.setParameters(p);
+  } catch { /* Safari may refuse: default bitrate still fine */ }
+}
+
+function report() {
+  if (!stream) { setStatus(screens.length ? `${screens.length} pantalla(s) esperando · pulsa enviar` : 'esperando a la pantalla (abre los visuales en el portátil)'); return; }
+  const states = [...pcs.values()].map((p) => p.connectionState);
+  const t = stream.getVideoTracks()[0]?.getSettings() ?? {};
+  const live = states.filter((s) => s === 'connected').length;
+  setStatus(`${live}/${screens.length} pantallas · ${t.width ?? '?'}×${t.height ?? '?'} @${t.frameRate?.toFixed?.(0) ?? '?'}` +
+    (states.some((s) => s === 'failed') ? ' · fallo, reintentando' : ''), live === 0 && screens.length > 0);
+}
+
+// --- capture --------------------------------------------------------------------
+// Back camera first; «girar cámara» toggles it.
+let facing = 'environment';
+// Widest view by default: a full body must fit from close by. Two routes:
+// the zoom range of the track (Android, iOS 17+; min < 1 = ultra-wide lens),
+// or a separate ultra-wide device (iOS lists "Back Ultra Wide Camera").
+let zoomWanted = null;
+let wideDevice = null;
+let useWide = false;
+async function capture() {
+  const w = Number($('quality').value);
+  const video = { width: { ideal: w }, height: { ideal: (w * 9) / 16 }, frameRate: { ideal: 30 } };
+  if (useWide && wideDevice && facing === 'environment') video.deviceId = { exact: wideDevice };
+  else video.facingMode = facing;
+  const s = await navigator.mediaDevices.getUserMedia({ audio: false, video });
+  setupZoom(s.getVideoTracks()[0]);
+  findWideDevice();
+  return s;
+}
+
+function setupZoom(track) {
+  const cap = track?.getCapabilities?.()?.zoom;
+  const row = $('zoom-row');
+  if (!cap || !(cap.max > cap.min)) { row.hidden = true; return; }
+  const z = $('zoom');
+  z.min = cap.min; z.max = cap.max; z.step = cap.step || 0.1;
+  row.hidden = false;
+  const v = Math.min(cap.max, Math.max(cap.min, zoomWanted ?? cap.min));
+  z.value = v;
+  applyZoom(v, track);
+}
+function applyZoom(v, track = stream?.getVideoTracks()[0]) {
+  zoomWanted = v;
+  $('zoom-val').textContent = v.toFixed(1) + 'x';
+  track?.applyConstraints({ advanced: [{ zoom: v }] }).catch(() => {});
+}
+$('zoom').addEventListener('input', () => applyZoom(Number($('zoom').value)));
+
+async function findWideDevice() {
+  if (wideDevice) return;
+  const devs = await navigator.mediaDevices.enumerateDevices().catch(() => []);
+  const d = devs.find((d) => d.kind === 'videoinput' && /ultra|wide|angular/i.test(d.label) && !/front|frontal/i.test(d.label));
+  if (!d) return;
+  wideDevice = d.deviceId;
+  $('wide').hidden = false;
+}
+
+async function start(getStream) {
+  stop();
+  try {
+    stream = await getStream();
+  } catch (e) {
+    setStatus('cámara no disponible: ' + e.message + (location.protocol === 'http:' ? ' (usa https://)' : ''), true);
+    return;
+  }
+  $('preview').srcObject = stream;
+  $('start').textContent = 'parar';
+  $('start').className = 'on';
+  for (const sid of screens) offer(sid);
+  report();
+  try { wakeLock = await navigator.wakeLock?.request('screen'); } catch { /* optional */ }
+  try { await screen.orientation?.lock?.('landscape'); } catch { /* needs fullscreen; optional */ }
+}
+
+function stop() {
+  for (const pc of pcs.values()) pc.close();
+  pcs.clear();
+  stream?.getTracks().forEach((t) => t.stop());
+  stream = null;
+  $('zoom-row').hidden = true;
+  $('preview').srcObject = null;
+  $('start').textContent = 'enviar cámara';
+  $('start').className = 'big';
+  wakeLock?.release?.();
+  report();
+}
+
+$('start').addEventListener('click', () => (stream ? stop() : start(capture)));
+$('flip').addEventListener('click', () => {
+  facing = facing === 'user' ? 'environment' : 'user';
+  retake();
+});
+// Swap the live track in place: no renegotiation, the screen keeps the stream.
+async function retake() {
+  if (!stream) return;
+  const next = await capture().catch(() => null);
+  if (!next) return;
+  const track = next.getVideoTracks()[0];
+  for (const pc of pcs.values()) for (const s of pc.getSenders()) if (s.track?.kind === 'video') s.replaceTrack(track);
+  stream.getTracks().forEach((t) => t.stop());
+  stream = next;
+  $('preview').srcObject = stream;
+  report();
+}
+$('wide').addEventListener('click', () => {
+  useWide = !useWide;
+  $('wide').className = useWide ? 'on' : '';
+  retake();
+});
+
+// --- macro pad: x = palette, y = sat, sent to every screen via the server ----------
+const pad = $('pad');
+let padX = 0.4, padY = 0.4;
+let padTimer = 0, padDirty = false;
+let padTouched = 0;   // last touch time: ignore echoes from the screen while dragging
+function drawPad() {
+  $('knob').style.left = padX * 100 + '%';
+  $('knob').style.top = (1 - padY) * 100 + '%';
+  $('pad-sat').textContent = 'sat ' + padY.toFixed(2);
+  $('pad-pal').textContent = 'palette ' + padX.toFixed(2);
+}
+function sendPad() {
+  send({ type: 'macro', name: 'palette', value: padX });
+  send({ type: 'macro', name: 'sat', value: padY });
+}
+// The screen pushes its values on connect and whenever they change (panel,
+// MIDI, preset, another phone): the knob follows, so a touch never jumps.
+function followPad(values) {
+  if (performance.now() - padTouched < 400) return;
+  if (typeof values?.palette === 'number') padX = values.palette;
+  if (typeof values?.sat === 'number') padY = values.sat;
+  drawPad();
+}
+function padMove(ev) {
+  padTouched = performance.now();
+  const r = pad.getBoundingClientRect();
+  padX = Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width));
+  padY = Math.min(1, Math.max(0, 1 - (ev.clientY - r.top) / r.height));
+  drawPad();
+  // ~30 msg/s at most; the last position always goes out.
+  if (padTimer) { padDirty = true; return; }
+  sendPad();
+  padTimer = setTimeout(() => { padTimer = 0; if (padDirty) { padDirty = false; sendPad(); } }, 33);
+}
+pad.addEventListener('pointerdown', (ev) => { pad.setPointerCapture(ev.pointerId); padMove(ev); });
+pad.addEventListener('pointermove', (ev) => { if (ev.buttons) padMove(ev); });
+drawPad();
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && stream) wakeLock = navigator.wakeLock?.request?.('screen').catch(() => null); });
+
+connect();
+</script>
+</body>
+</html>

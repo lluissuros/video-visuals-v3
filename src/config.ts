@@ -5,7 +5,9 @@
 //   ?structure=gz|sim|clock        what drives the wave cycle
 //   ?audio=1|0                     external audio analysis on/off
 //   ?camera=1                      performer-tracking prototype on
+//   ?phone=192.168.1.40:5276       phone-cam server (tools/phone-cam), if not local
 //   ?res=0.5                       feedback buffer scale (lower = faster on the M1)
+//   ?hold=0                        let the sequencer change presets (default: HOLD on)
 
 const q = new URLSearchParams(window.location.search);
 
@@ -17,16 +19,20 @@ export const config = {
   structure: (q.get('structure') ?? 'sim') as StructureMode,
   audioEnabled: q.get('audio') !== '0',
   cameraEnabled: q.get('camera') === '1',
+  /** Signaling server for phone cameras (node tools/phone-cam/server.mjs). */
+  phoneHost: q.get('phone') ?? 'localhost:5276',
   /** Feedback buffer resolution relative to the canvas. 1 = full res;
    *  drop to 0.5 on a weaker machine (the M1) if fps suffers. */
   resScale: Number(q.get('res') ?? '1'),
   paletteSize: 5,
   /** Seconds between palette re-extractions. */
   paletteInterval: 4,
-  /** Scene length in clock mode, seconds. */
+  /** Preset length in clock mode, seconds. */
   clockSceneSeconds: 45,
-  /** ?scene=N forces a scene (1-based) and starts with HOLD on. */
-  scene: q.get('scene') !== null ? Number(q.get('scene')) - 1 : null,
-  /** ?shader=N forces a generative shader (1-6) on top of any scene. */
+  /** HOLD on at start: presets only change by hand. ?hold=0 lets the sequencer run. */
+  hold: q.get('hold') !== '0',
+  /** ?preset=N starts on saved preset N (1-based); default: the first one. */
+  preset: q.get('preset') !== null ? Number(q.get('preset')) - 1 : 0,
+  /** ?shader=N forces a generative shader (1-9) on top of any preset. */
   shader: q.get('shader') !== null ? Number(q.get('shader')) : null,
 };

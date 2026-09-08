@@ -4,6 +4,9 @@ public/media/*
 # mediapipe model, fetched by tools/fetch-models.sh
 public/models/*
 !public/models/.gitkeep
+# self-signed cert for the phone camera link, generated on first run
+tools/phone-cam/.cert/
 node_modules/
 dist/
 .DS_Store
+.playwright-mcp/

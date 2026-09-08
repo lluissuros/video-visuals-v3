@@ -10,7 +10,8 @@
 //
 // Types: 1 tunel, 2 pliegue, 3 kali, 4 columnas, 5 olas, 6 orbita,
 // 7 vidrio, 8 solar (7 and 8 after XorDev's "Glass" and "Solar", CC-BY-4.0,
-// fragcoord.xyz/s/gwznloxf and /s/stpng88o).
+// fragcoord.xyz/s/gwznloxf and /s/stpng88o), 9 estrellas (layered grids of
+// dots after XorDev's "Efficient Chaos", mini.gmshaders.com/p/chaos).
 
 import { NOISE } from './glsl';
 
@@ -27,8 +28,14 @@ uniform float uEnergy;
 uniform float uOnset;
 uniform float uTurnProb;
 uniform sampler2D uVideo;
+uniform vec2 uVideoFit;
 uniform float uHasVideo;
 uniform float uVideoInf;
+// estrellas only
+uniform float uChaos;
+uniform float uMovement;
+uniform float uQuantity;
+uniform float uSize;
 
 ${NOISE}
 
@@ -205,6 +212,65 @@ vec4 solar(vec2 uv, float t) {
   return vec4(col * 0.55, clamp(field, 0.0, 1.0));
 }
 
+// One grid of dots, one star per cell. uChaos jitters each star inside its
+// cell and varies its size; uMovement picks the share of stars that wander
+// around their spot. The 3x3 neighbourhood is summed so a star's disc can
+// cross cell borders. Returns an unbounded light sum.
+float starLayer(vec2 p, float t, float r, float seed) {
+  vec2 cell = floor(p);
+  vec2 f = p - cell;
+  float acc = 0.0;
+  for (int y = -1; y <= 1; y++)
+    for (int x = -1; x <= 1; x++) {
+      vec2 o = vec2(float(x), float(y));
+      vec2 id = cell + o + seed;
+      vec2 h = vec2(hash12(id), hash12(id + 17.3));
+      vec2 pos = 0.5 + (h - 0.5) * 0.9 * uChaos;
+      // window placed so 0 leaves every star still and 1 moves them all
+      float m = uMovement * 1.1 - 0.05;
+      float moving = 1.0 - smoothstep(m - 0.05, m + 0.05, hash12(id + 41.7));
+      vec2 rate = 0.3 + h * 0.9;
+      pos += vec2(sin(t * rate.x + h.y * 6.2832), cos(t * rate.y + h.x * 6.2832)) * 0.35 * moving;
+      float rr = r * (1.0 - 0.6 * uChaos * hash12(id + 5.1));
+      float len = length(f - o - pos) / rr;
+      // flat disc with a thin soft rim, plus a faint halo
+      acc += smoothstep(1.0, 0.8, len) + 0.15 * pow(max(1.0 - len * 0.7, 0.0), 2.0);
+    }
+  return acc;
+}
+
+// Stars (after XorDev's "Efficient Chaos"): a base grid, plus up to three
+// more grids rotated by the golden angle, shifted and rescaled, that fade in
+// with uChaos - regular grid at 0, a dense irregular field at 1. The flow
+// pass lets the film through only where this mask is lit (see uGenMask).
+vec4 estrellas(vec2 uv, float t) {
+  // cells per screen height; thinned as the extra layers come in, so the
+  // star count follows quantity rather than chaos
+  float n = mix(2.0, 40.0, pow(uQuantity, 1.6)) / (1.0 + 0.5 * uChaos);
+  float r = mix(0.05, 0.4, uSize * uSize);             // radius in cells; gaps stay at max
+  vec2 c = uv * n * 0.5;
+  c += uChaos * 0.35 * sin(c.yx * 0.7);                // bends the grid lines
+  float acc = starLayer(c, t, r, 0.0);
+  mat2 gold = mat2(0.22252093, -0.97492791, 0.97492791, 0.22252093);
+  for (float i = 1.0; i < 4.0; i++) {
+    float w = smoothstep(i * 0.25 - 0.2, i * 0.25 + 0.15, uChaos);
+    if (w <= 0.0) continue;
+    c *= gold;
+    vec2 p = (c + 2.618 * i) / (1.0 + 0.35 * i);
+    p += uChaos * 0.3 * sin(p.yx);
+    acc += starLayer(p, t, r, i * 13.7) * w;
+  }
+  float mask = tanh(acc * 1.3);
+
+  // rgb: the film's own colour under the dot (palette tint without a film),
+  // reinforcing what the flow pass lets through. a: the mask the flow pass
+  // gates the film with; uVideoInf sets the gap brightness there.
+  vec3 col = hsv(uHue, 0.55, 1.0);
+  if (uHasVideo > 0.5) col = texture2D(uVideo, (vUv - 0.5) * uVideoFit + 0.5).rgb * 1.2 + col * 0.1;
+  col *= mask * 0.35 * (0.8 + uEnergy * 0.5);
+  return vec4(col, mask);
+}
+
 void main() {
   vec2 uv = (vUv - 0.5) * uAspect * 2.0 * uZoom;
   float t = uTime;
@@ -216,13 +282,15 @@ void main() {
   else if (uType == 5) g = olas(uv, t);
   else if (uType == 6) g = orbita(uv, t);
   else if (uType == 7) g = vidrio(uv, t);
+  else if (uType == 9) g = estrellas(uv, t);
   else                 g = solar(uv, t);
 
   // The source video recolors the fractal with its own chroma (independent
   // of brightness, so a dark film still tints instead of just dimming) and
   // its shapes surface where the fractal glows. At knob 0: pure fractal.
-  if (uHasVideo > 0.5 && uVideoInf > 0.001) {
-    vec3 vid = texture2D(uVideo, vUv).rgb;
+  // estrellas skips this: the flow pass gates the film with its mask.
+  if (uType != 9 && uHasVideo > 0.5 && uVideoInf > 0.001) {
+    vec3 vid = texture2D(uVideo, (vUv - 0.5) * uVideoFit + 0.5).rgb;
     float vl = dot(vid, vec3(0.299, 0.587, 0.114));
     vec3 chroma = vid / max(vl, 0.12);
     float gl = dot(g.rgb, vec3(0.299, 0.587, 0.114));

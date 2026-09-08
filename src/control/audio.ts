@@ -14,6 +14,8 @@ export class AudioAnalyser {
   private fluxAvg = 0;
   running = false;
   error: string | null = null;
+  /** The input stream, so the recorder can put the music on the video. */
+  stream: MediaStream | null = null;
 
   async start(deviceId?: string) {
     try {
@@ -25,6 +27,7 @@ export class AudioAnalyser {
           autoGainControl: false,
         },
       });
+      this.stream = stream;
       const ctx = new AudioContext();
       const src = ctx.createMediaStreamSource(stream);
       this.analyser = ctx.createAnalyser();

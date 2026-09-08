@@ -1,53 +1,78 @@
 // Media catalogue and switching. Sources come from public/media/manifest.json
-// (regenerate with tools/scan-media.sh) and from files dragged onto the window.
-// Videos and still images both work; a different source changes the whole
-// piece, so this is meant to be played with.
+// (regenerate with tools/scan-media.sh), from files dragged onto the window,
+// and from live cameras (laptop, USB, phones - see live.ts). Videos, still
+// images and cameras all become the film texture; a different source changes
+// the whole piece, so this is meant to be played with.
 
 import * as THREE from 'three';
 import { VideoSource } from './video';
+import type { LiveSources } from './live';
 
 export interface MediaItem {
   name: string;
+  /** Files: their URL. Live cameras: `live:<liveId>` (stable across reloads). */
   url: string;
-  kind: 'video' | 'image';
+  kind: 'video' | 'image' | 'live';
 }
 
 export type MediaElement = HTMLVideoElement | HTMLImageElement;
 
 const VIDEO_RE = /\.(mp4|mov|webm|m4v)$/i;
+const LIVE_PREFIX = 'live:';
 
 export class MediaManager {
-  items: MediaItem[] = [];
+  private files: MediaItem[] = [];
   current: MediaItem | null = null;
   private video: VideoSource | null = null;
   private imageTex: THREE.Texture | null = null;
   private imageEl: HTMLImageElement | null = null;
+  private liveTex: THREE.VideoTexture | null = null;
+  private liveEl: HTMLVideoElement | null = null;
   private speed = 1;
 
   /** Wired by main: receives the texture and the element (for the palette). */
   onSource: ((tex: THREE.Texture, el: MediaElement) => void) | null = null;
   onListChange: (() => void) | null = null;
 
+  constructor(private live: LiveSources) {
+    live.onChange(() => this.onListChange?.());
+  }
+
+  /** Files first, then the cameras available right now. A camera that was
+   *  selected and dropped off (phone reload) stays listed: its element keeps
+   *  the texture and picks the stream up again when the phone returns. */
+  get items(): MediaItem[] {
+    const cams: MediaItem[] = this.live.list().map((l) => ({
+      name: l.name,
+      url: LIVE_PREFIX + l.id,
+      kind: 'live' as const,
+    }));
+    if (this.current?.kind === 'live' && !cams.some((c) => c.url === this.current!.url)) {
+      cams.push({ ...this.current, name: `${this.current.name} (desconectado)` });
+    }
+    return [...this.files, ...cams];
+  }
+
   async init(defaultUrl: string) {
     try {
       const res = await fetch('/media/manifest.json');
       if (res.ok) {
         const names: string[] = await res.json();
-        this.items = names.map((n) => ({
+        this.files = names.map((n) => ({
           name: n,
           url: `/media/${encodeURIComponent(n)}`,
           kind: VIDEO_RE.test(n) ? 'video' : 'image',
         }));
       }
     } catch { /* no manifest: default source only */ }
-    if (this.items.length === 0) {
-      this.items = [{
+    if (this.files.length === 0) {
+      this.files = [{
         name: defaultUrl.split('/').pop() ?? defaultUrl,
         url: defaultUrl,
         kind: 'video',
       }];
     }
-    const wanted = this.items.find((i) => i.url === defaultUrl) ?? this.items[0];
+    const wanted = this.items.find((i) => i.url === defaultUrl) ?? this.files[0];
     this.select(wanted);
     // The manifest fetch resolves after the panel is built: tell it the
     // catalogue exists, or the source selector starts empty.
@@ -63,11 +88,14 @@ export class MediaManager {
       this.video = new VideoSource(item.url, startAt);
       this.video.setSpeed(this.speed);
       this.onSource?.(this.video.texture, this.video.element);
+    } else if (item.kind === 'live') {
+      this.selectLive(item);
     } else {
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.src = item.url;
       img.onload = () => {
+        if (this.current !== item) return;
         const tex = new THREE.Texture(img);
         tex.colorSpace = THREE.SRGBColorSpace;
         tex.needsUpdate = true;
@@ -76,6 +104,25 @@ export class MediaManager {
         this.onSource?.(tex, img);
       };
     }
+  }
+
+  private async selectLive(item: MediaItem) {
+    const el = await this.live.acquire(item.url.slice(LIVE_PREFIX.length));
+    if (this.current !== item) {
+      if (el) this.live.release(item.url.slice(LIVE_PREFIX.length));
+      return;
+    }
+    if (!el) {
+      this.select(this.files[0]); // permission refused or device gone
+      return;
+    }
+    const tex = new THREE.VideoTexture(el);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.minFilter = THREE.LinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    this.liveTex = tex;
+    this.liveEl = el;
+    this.onSource?.(tex, el);
   }
 
   /** Drag a video or image from Finder onto the window. */
@@ -96,7 +143,7 @@ export class MediaManager {
         url: URL.createObjectURL(file),
         kind,
       };
-      this.items.push(item);
+      this.files.push(item);
       this.onListChange?.();
       this.select(item);
     });
@@ -104,7 +151,7 @@ export class MediaManager {
 
   /** The element the palette extractor samples, if any is ready. */
   get element(): MediaElement | null {
-    return this.video?.element ?? this.imageEl;
+    return this.video?.element ?? this.liveEl ?? this.imageEl;
   }
 
   get videoSource(): VideoSource | null {
@@ -150,5 +197,11 @@ export class MediaManager {
     this.imageTex?.dispose();
     this.imageTex = null;
     this.imageEl = null;
+    if (this.current?.kind === 'live' && this.liveEl) {
+      this.live.release(this.current.url.slice(LIVE_PREFIX.length));
+    }
+    this.liveTex?.dispose();
+    this.liveTex = null;
+    this.liveEl = null;
   }
 }

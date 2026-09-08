@@ -51,22 +51,38 @@ export interface WaveState {
 /** Live overrides for the generative layer, adjustable from the panel and
  *  saved in presets. All 0..1; 0.5 means "neutral" for the multipliers. */
 export interface GenOverrides {
-  /** 0 = use the scene's own shader; 1..6 pick one explicitly. */
+  /** 0 = the preset's base shader (Look.gen, often none); 1.. pick one explicitly. */
   type: number;
   /** Time multiplier: 0 -> 0.25x, 0.5 -> 1x, 1 -> 4x. */
   speed: number;
   /** Spatial zoom: 0 -> 0.33x, 0.5 -> 1x, 1 -> 3x. */
   zoom: number;
-  /** Multiplies the scene's genMix/genWarp: 0 -> off, 0.5 -> 1x, 1 -> 2x. */
+  /** Multiplies the look's genMix/genWarp: 0 -> off, 0.5 -> 1x, 1 -> 2x. */
   opacity: number;
-  /** How much the source video tints and gates the fractal. */
+  /** How much the source video tints and gates the fractal. For estrellas:
+   *  brightness of the film between the dots (0 = film only through the dots). */
   video: number;
+  /** estrellas: 0 = a regular grid of dots, 1 = jittered, layered, warped. */
+  chaos: number;
+  /** estrellas: share of the stars that wander (0 = all still). */
+  movement: number;
+  /** estrellas: star density. */
+  quantity: number;
+  /** estrellas: dot radius relative to its cell. */
+  size: number;
 }
 
+export const DEFAULT_GEN: GenOverrides = {
+  type: 0, speed: 0.5, zoom: 0.5, opacity: 0.5, video: 0.35,
+  chaos: 0.5, movement: 0.3, quantity: 0.5, size: 0.4,
+};
+
 export const GEN_TYPE_NAMES = [
-  'escena', 'tunel', 'pliegue', 'kali', 'columnas', 'olas', 'orbita',
-  'vidrio', 'solar',
+  'base', 'tunel', 'pliegue', 'kali', 'columnas', 'olas', 'orbita',
+  'vidrio', 'solar', 'estrellas',
 ];
+/** Index of the star layer in GEN_TYPE_NAMES; its extra knobs only show for it. */
+export const GEN_TYPE_STARS = GEN_TYPE_NAMES.indexOf('estrellas');
 
 /** Performer-camera parameters, adjustable from the panel, saved in presets.
  *  All 0..1. */
@@ -81,7 +97,30 @@ export interface CamParams {
   auraSize: number;
   /** How fast the color waves travel outward. */
   auraSpeed: number;
+  /** Mask smoothing: softens silhouette and aura edges (GPU blur of the mask). */
+  silBlur: number;
+  /** Aura colors: 0 = rainbow around the main palette color, 1 = the palette itself. */
+  auraMode: number;
+  /** How fast the aura (and body tint) colors change: 0 = frozen, 0.5 = slow drift. */
+  auraHue: number;
+  /** How much performer movement swells the aura. 0 = the aura ignores motion. */
+  motion: number;
+  /** Max delay of the shadow silhouettes: 0 = all move with the body, 1 = up to 10 s behind. */
+  auraDelay: number;
+  /** Share of the 8 shadows mirrored to the other side of the screen. */
+  auraMirror: number;
+  /** Colour spread between shadows: 0 = all the same colour, 1 = a full hue turn. */
+  auraSpread: number;
+  /** Volumetric contour glow (saturated raymarch toward the body). */
+  auraGlow: number;
+  /** People the tracker looks for: 0 = 1 person, 1 = 4 (posesFromParam). */
+  poses: number;
+  /** How sure the model must be before a shape counts as a body. Raise it when
+   *  the camera sees the projection and invents performers. */
+  confidence: number;
 }
+
+export const AURA_MODE_NAMES = ['arcoíris', 'paleta'];
 
 export const DEFAULT_CAM: CamParams = {
   silOpacity: 0.75,
@@ -89,6 +128,16 @@ export const DEFAULT_CAM: CamParams = {
   aura: 0.6,
   auraSize: 0.5,
   auraSpeed: 0.5,
+  silBlur: 0.3,
+  auraMode: 0,
+  auraHue: 0.5,
+  motion: 0.4,
+  auraDelay: 0,
+  auraMirror: 0,
+  auraSpread: 0,
+  auraGlow: 0,
+  poses: 1 / 3,
+  confidence: 0.5,
 };
 
 export interface ControlFrame {
@@ -97,15 +146,16 @@ export interface ControlFrame {
   macros: Macros;
   audio: AudioSignals;
   wave: WaveState;
-  /** Active visual scene index. Changes are instant; the feedback buffer
-   *  carries the visual continuity. */
-  scene: number;
+  /** The character block the active preset carries. */
+  look: Look;
   gen: GenOverrides;
   cam: CamParams;
 }
 
-export interface ScenePreset {
-  name: string;
+/** The character of the piece under the macros: flow field, injection,
+ *  kaleidoscope and a base generative layer. Not editable from the panel; each
+ *  preset carries one (migrated from the old fixed scene table). */
+export interface Look {
   /** Spatial scale of the flow noise. */
   flowScale: number;
   /** Speed of flow evolution. */
@@ -131,3 +181,10 @@ export interface ScenePreset {
   /** Kaleidoscope rotation speed, radians/second. */
   kaleidoSpin: number;
 }
+
+/** Slow ember drift, close to the film (the old first scene). */
+export const DEFAULT_LOOK: Look = {
+  flowScale: 1.6, flowSpeed: 0.06, swirl: 0.1, inject: 0.1, videoZoom: 1.0,
+  hueShift: 0.0, abstraction: 0.35, gen: 0, genMix: 0, genWarp: 0,
+  kaleido: 0, kaleidoSpin: 0,
+};

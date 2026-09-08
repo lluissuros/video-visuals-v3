@@ -28,6 +28,7 @@ uniform sampler2D uGen;
 uniform float uHasVideo;
 uniform float uHasMask;
 uniform vec2 uAspect;      // (aspect, 1) to keep the flow isotropic
+uniform vec2 uVideoFit;    // cover-fit of the source onto the canvas
 uniform vec2 uTexel;       // 1 / feedback buffer size
 uniform float uTime;
 
@@ -56,8 +57,14 @@ uniform float uHueShift;
 uniform float uAbstraction;
 uniform float uGenMix;
 uniform float uGenWarp;
+// estrellas: the gen alpha gates the film, gaps fall to uGenGap brightness
+uniform float uGenMask;
+uniform float uGenGap;
 
 uniform vec3 uAuraColor;
+uniform vec3 uColors[5];   // extracted palette, most saturated first
+uniform float uAuraMode;   // 0 rainbow, 1 palette
+uniform float uAuraHue;    // color change rate, radians/s (0 = frozen)
 
 // camera / silhouette params
 uniform float uSilOpacity;
@@ -65,8 +72,53 @@ uniform float uSilTint;
 uniform float uAura;
 uniform float uAuraSize;
 uniform float uAuraSpeed;
+uniform float uMotion;     // performer movement 0..1, already scaled by the param
+uniform float uAuraTime;   // aura clock: runs faster while the performers move
+
+// shadow silhouettes: 8 offset copies of the mask, each with its own delay
+uniform sampler2D uMaskHist;  // atlas of past masks, one tile per HIST_STEP
+uniform vec2 uHistTiles;      // tiles per row / column
+uniform float uHistIdx;       // tile written most recently
+uniform float uHistStep;      // seconds between tiles
+uniform float uAuraDelay;     // max shadow delay, seconds (0 = all live)
+uniform float uAuraMirror;    // share of the shadows mirrored left<->right
+uniform float uAuraSpread;    // hue spread between shadows, turns
+uniform float uAuraGlow;      // volumetric contour glow
 
 ${NOISE}
+
+// Palette color at a continuous index (wraps), kept luminous for the aura.
+vec3 paletteAt(float k) {
+  k = mod(k, 5.0);
+  float f = fract(k);
+  vec3 a = uColors[0];
+  vec3 b = uColors[0];
+  for (int i = 0; i < 5; i++) {
+    if (float(i) == floor(k)) {
+      a = uColors[i];
+      b = uColors[(i + 1) % 5];
+    }
+  }
+  vec3 c = mix(a, b, f);
+  return c * (1.1 / max(0.3, max(c.r, max(c.g, c.b))));
+}
+
+// Mask as shadow i sees it: mirrored for some, and read from the history
+// atlas delay_i seconds ago. Delays spread over the 8 shadows in a
+// non-adjacent order so neighbours never lag alike; shadow 0 is always live.
+float shadowMask(int i, vec2 p) {
+  float fi = float(i);
+  float mirrored = step(mod(fi * 5.0, 8.0) + 0.5, uAuraMirror * 8.0);
+  p.x = mix(p.x, 1.0 - p.x, mirrored);
+  float delay = uAuraDelay * fract(fi * 0.375);
+  if (delay < uHistStep * 0.5) return texture2D(uMask, p).r;
+  float n = uHistTiles.x * uHistTiles.y;
+  float k = mod(uHistIdx - floor(delay / uHistStep + 0.5) + n, n);
+  vec2 tile = vec2(mod(k, uHistTiles.x), floor(k / uHistTiles.x));
+  return texture2D(uMaskHist, (tile + clamp(p, 0.003, 0.997)) / uHistTiles).r;
+}
+
+float tanhF(float x) { return 1.0 - 2.0 / (exp(2.0 * x) + 1.0); }
 
 // Diffused read of the previous frame: 5 rotating taps. Radius grows with the
 // blur macro; the rotation per frame turns the pentagon into a disc over time.
@@ -111,7 +163,7 @@ void main() {
     vec2 gm = vec2(
       texture2D(uMask, uv + vec2(0.02, 0.0)).r - texture2D(uMask, uv - vec2(0.02, 0.0)).r,
       texture2D(uMask, uv + vec2(0.0, 0.02)).r - texture2D(uMask, uv - vec2(0.0, 0.02)).r);
-    displaced += gm * (0.002 + uAuraSpeed * 0.008);
+    displaced += gm * (0.002 + uAuraSpeed * 0.008) * (1.0 + uMotion * 3.0);
   }
 
   // A LITTLE in-loop diffusion still compounds into melt, but the blur macro
@@ -125,7 +177,7 @@ void main() {
 
   // --- fresh video injection ----------------------------------------------
   if (uHasVideo > 0.5) {
-    vec2 vuv = (uv - 0.5) / uVideoZoom + 0.5;
+    vec2 vuv = (uv - 0.5) * uVideoFit / uVideoZoom + 0.5;
     // the generative field bends where the film is read from
     if (uGenWarp > 0.001) {
       float f0 = gen.a;
@@ -159,6 +211,8 @@ void main() {
       float mBody = texture2D(uMask, uv).r;
       vid = mix(vid, uAuraColor * 0.08, mBody * 0.9 * uSilOpacity);
     }
+    // estrellas: the film shows through the dots, the gaps go dark
+    if (uGenMask > 0.5) vid *= mix(uGenGap, 1.0, gen.a);
     float inj = uInject * (1.0 + uPulse * (uOnset * 2.5 + uEnergy))
               * (0.35 + uTurnProb * 0.65);
     acc = mix(acc, vid, clamp(inj, 0.0, 1.0));
@@ -177,31 +231,74 @@ void main() {
   // Body: a presence that darkens (or tints) the buffer, so every effect
   // flows OVER the figure. Emanation: color waves born at the body's edge
   // that travel outward through a wide soft halo - each crest a slightly
-  // different hue - while the advection above streams the light away.
+  // different hue - while the advection above streams the light away. The
+  // halo is built from 8 shadow silhouettes (offset copies of the mask), each
+  // with its own delay, side and hue.
   if (uHasMask > 0.5) {
     float m = texture2D(uMask, uv).r;
 
-    // wide soft halo: three rings of taps, reach set by the size param
-    float r1 = 0.025 + uAuraSize * 0.06;
+    // wide soft halo: three rings of taps per shadow, reach set by the size
+    // param and widened while the performers move
+    float r1 = (0.025 + uAuraSize * 0.06) * (1.0 + uMotion * 1.5);
+    float shadow[8];
     float prox = 0.0;
+    vec2 toBody = vec2(0.0);
     for (int i = 0; i < 8; i++) {
       float a = float(i) * 0.7854;
       vec2 d8 = vec2(cos(a), sin(a));
-      prox += texture2D(uMask, uv + d8 * r1).r * 0.5;
-      prox += texture2D(uMask, uv + d8 * r1 * 2.2).r * 0.33;
-      prox += texture2D(uMask, uv + d8 * r1 * 4.0).r * 0.17;
+      float p = shadowMask(i, uv + d8 * r1) * 0.5
+              + shadowMask(i, uv + d8 * r1 * 2.2) * 0.33
+              + shadowMask(i, uv + d8 * r1 * 4.0) * 0.17;
+      shadow[i] = p;
+      prox += p;
+      toBody += d8 * p;
     }
     prox /= 8.0;                          // ~1 at the body, fades with distance
     float outside = clamp(prox - m, 0.0, 1.0) * (1.0 - m);
 
     // crests move toward lower prox as time runs (= outward); the hue turns
     // along the same phase, so every new wave carries a new color
-    float ph = prox * 9.0 + uTime * (0.5 + uAuraSpeed * 4.0);
+    float ph = prox * 9.0 + uAuraTime * (0.5 + uAuraSpeed * 4.0);
     float wave = 0.35 + 0.65 * (0.5 + 0.5 * sin(ph));
-    vec3 auraCol = hueRotate(uAuraColor, sin(ph * 0.5) * 1.2 + uTime * 0.05);
+    float hueT = uTime * uAuraHue;
+    vec3 auraCol = uAuraMode > 0.5
+      ? paletteAt(ph * 0.4 + hueT)
+      : hueRotate(uAuraColor, sin(ph * 0.5) * 1.2 + hueT);
+    // colour spread: each shadow shifts the hue its own way, weighted by how
+    // much of the halo here is its own
+    if (uAuraSpread > 0.001 && prox > 0.001) {
+      vec3 sum = vec3(0.0);
+      for (int i = 0; i < 8; i++) {
+        float off = (fract(float(i) * 0.375) - 0.5) * uAuraSpread;
+        vec3 c = uAuraMode > 0.5
+          ? paletteAt(ph * 0.4 + hueT + off * 5.0)
+          : hueRotate(auraCol, off * 6.2832);
+        sum += c * shadow[i];
+      }
+      auraCol = sum / (prox * 8.0);
+    }
     float glow = outside * wave * uAura * 2.0
-               * (0.8 + uEnergy * uPulse * 2.5 + uOnset * uPulse * 2.0);
+               * (0.8 + uEnergy * uPulse * 2.5 + uOnset * uPulse * 2.0)
+               * (1.0 + uMotion * 5.0);
     acc = mix(acc, auraCol * 2.4, clamp(glow, 0.0, 1.0));
+
+    // contour glow: march from this pixel toward the body through the mask
+    // as a density field, then saturate (tanh) so it never blows white -
+    // a steady volumetric light leaking out of the silhouette
+    float lenB = length(toBody);
+    if (uAuraGlow > 0.001 && lenB > 0.02 && m < 0.98) {
+      vec2 dir = toBody / lenB;
+      vec2 stepV = dir * r1 * 6.0 / 12.0;
+      vec2 pos = uv;
+      float vol = 0.0;
+      for (int s = 0; s < 12; s++) {
+        pos += stepV;
+        vol += texture2D(uMask, pos).r;
+      }
+      float ray = tanhF(vol / 12.0 * 3.0 * uAuraGlow * (1.0 + uMotion * 2.0));
+      ray *= (1.0 - m) * uAura * (0.7 + uEnergy * uPulse * 1.5);
+      acc = mix(acc, auraCol * 2.0, clamp(ray * 0.7, 0.0, 1.0));
+    }
 
     // body presence: dark or tinted toward the aura color, by its own opacity
     vec3 bodyCol = mix(acc * (1.0 - uSilOpacity * 0.85),
