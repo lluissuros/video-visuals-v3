@@ -1,6 +1,6 @@
-# media is heavy and personal; drop source clips into public/media yourself
-public/media/*
-!public/media/.gitkeep
+# assets are heavy and personal: sources in assets/input, recordings in assets/output
+assets/*/*
+!assets/*/.gitkeep
 # mediapipe model, fetched by tools/fetch-models.sh
 public/models/*
 !public/models/.gitkeep

@@ -35,4 +35,7 @@ export const config = {
   preset: q.get('preset') !== null ? Number(q.get('preset')) - 1 : 0,
   /** ?shader=N forces a generative shader (1-9) on top of any preset. */
   shader: q.get('shader') !== null ? Number(q.get('shader')) : null,
+  /** Recording bitrate, Mbps. Grain and feedback detail need a lot; 60 is
+   *  near-transparent at 1080p. ?recbps=N to change. */
+  recMbps: Number(q.get('recbps') ?? '60'),
 };

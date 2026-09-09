@@ -11,6 +11,7 @@ import type { ControlBus } from '../control/bus';
 import type { MidiControl } from '../control/midi';
 import type { MediaManager } from '../sources/media';
 import type { LiveSources } from '../sources/live';
+import { openAssetsFolder } from '../sources/assets';
 import QRCode from 'qrcode';
 import { PresetStore, type Preset } from '../control/presets';
 import type { Recorder } from './recorder';
@@ -61,7 +62,7 @@ const HELP_LINES: [string, string][] = [
   ['l', 'loopea el vídeo desde este momento (otra vez: suelta)'],
   ['m', 'vista de la máscara de cámara (esquina inferior derecha)'],
   ['q', 'QR con la dirección que abre el móvil para enviar su cámara'],
-  ['r', 'graba la pantalla (otra vez: para y descarga el .mp4)'],
+  ['r', 'graba la pantalla (otra vez: para y guarda el .mp4 en assets/output)'],
   ['arrastra', 'suelta un vídeo o imagen del Finder sobre la ventana para usarlo'],
 ];
 
@@ -83,6 +84,9 @@ const GEN_SLIDERS: [GenKey, string][] = [
   ['opacity', 'presencia del shader (0.5 = la del preset)'],
   ['video', 'cuánto colorea y dibuja el vídeo dentro del shader (necesita opacity > 0); en estrellas, cuánto vídeo se ve ENTRE los puntos (0 = solo a través de ellos)'],
 ];
+const FOLDER_ICON = '<svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor">'
+  + '<path d="M1.5 3.5A1.5 1.5 0 0 1 3 2h3.2l1.6 1.5H13A1.5 1.5 0 0 1 14.5 5v7A1.5 1.5 0 0 1 13 13.5H3A1.5 1.5 0 0 1 1.5 12z"/></svg>';
+
 /** Only for the estrellas shader; the rows hide for the rest. */
 const STAR_SLIDERS: [GenKey, string][] = [
   ['chaos', 'estrellas: 0 = cuadrícula de puntos, 1 = desorden total en capas'],
@@ -191,9 +195,13 @@ export class Panel {
     this.modeEl.className = 'mode';
     this.holdBtn = this.button('hold', 'congela el cambio de preset (tecla p)',
       () => this.toggleHold());
-    this.recBtn = this.button('rec', 'graba lo que se ve en pantalla (tecla r); otra vez: para y descarga',
+    this.recBtn = this.button('rec', 'graba lo que se ve en pantalla (tecla r); otra vez: para y guarda en assets/output',
       () => hooks.recorder.toggle());
-    modeRow.append(this.modeEl, this.holdBtn, this.recBtn);
+    const folderBtn = this.button('', 'abre la carpeta assets: input (fuentes) y output (grabaciones)',
+      () => openAssetsFolder());
+    folderBtn.className = 'icon';
+    folderBtn.innerHTML = FOLDER_ICON;
+    modeRow.append(this.modeEl, this.holdBtn, this.recBtn, folderBtn);
     this.root.appendChild(modeRow);
 
     this.waveCanvas = document.createElement('canvas');
@@ -437,8 +445,11 @@ export class Panel {
     this.body = el;
   }
 
+  /** The star knobs only show when the shader that runs is estrellas
+   *  (chosen here, or brought by the preset's look under «base»). */
   private syncStarRows() {
-    const show = this.bus.gen.type === GEN_TYPE_STARS;
+    const type = this.bus.gen.type > 0 ? this.bus.gen.type : this.bus.look.gen;
+    const show = type === GEN_TYPE_STARS;
     for (const row of this.starRows) row.hidden = !show;
   }
 
@@ -757,8 +768,9 @@ export class Panel {
       <h2>grabar</h2>
       <p>«rec» (o r) graba lo que se ve en pantalla, sin el panel, y con el
       audio de entrada si el análisis de audio está activo. Otra pulsación
-      para y descarga un .mp4 (H.264) con fecha y hora; en navegadores que no
-      saben escribir mp4 sale un .webm.</p>
+      para y guarda en assets/output un .mp4 (H.264) con fecha y hora; en
+      navegadores que no saben escribir mp4 sale un .webm. El botón de la
+      carpeta abre assets/ en el Finder: input (fuentes) y output (grabaciones).</p>
       <h2>rendimiento</h2>
       <p>El navegador no puede leer la carga de CPU ni de GPU; mide lo que sí
       ve. El semáforo de arriba a la derecha es el porcentaje del tiempo que
@@ -811,7 +823,7 @@ export class Panel {
     const rec = this.hooks.recorder;
     this.recBtn.classList.toggle('on', rec.recording);
     this.recBtn.textContent = rec.recording ? `● ${formatTime(rec.elapsed)}` : 'rec';
-    this.recBtn.title = rec.error ?? 'graba lo que se ve en pantalla (tecla r); otra vez: para y descarga';
+    this.recBtn.title = rec.error ?? 'graba lo que se ve en pantalla (tecla r); otra vez: para y guarda en assets/output';
 
     this.cameraBtn.textContent = `camera ${status.camera}`;
     this.cameraBtn.classList.toggle('on', status.camera === 'on');

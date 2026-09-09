@@ -19,14 +19,15 @@ and [docs/PHONE-CAMERA.md](docs/PHONE-CAMERA.md) for using a phone as camera.
 
 ```sh
 npm install
-./tools/scan-media.sh    # regenerate the source list from public/media/
 npm run dev              # http://localhost:5274 - press `i` for instructions
 npm run phone            # optional: phone cameras, see docs/PHONE-CAMERA.md
 ```
 
-Sources live in `public/media/` (gitignored, they do not travel with the repo).
-Drop new videos or images there and re-run `tools/scan-media.sh` - or just drag
-a file from Finder onto the running page.
+Assets live in `assets/` (gitignored, they do not travel with the repo):
+`assets/input/` holds the sources, `assets/output/` receives the recordings.
+Drop new videos or images into `input` and reload the page, or drag a file from
+Finder onto the running page (that one lives only until the tab closes). The
+folder button in the panel opens `assets/` in Finder.
 
 One-time, only for the performer-tracking prototype:
 
@@ -119,6 +120,7 @@ before this change were migrated to it on first load. The shader dropdown's
 | `posemodel` | `full` | `lite` for a faster, rougher pose model on a slow machine |
 | `phone` | `localhost:5276` | phone-cam signaling server, if it runs elsewhere |
 | `res` | `1` | feedback buffer scale; drop to `0.5` on the M1 if fps suffers |
+| `recbps` | `60` | recording bitrate in Mbps; the grain needs a lot, 16 looks soft |
 | `seek` | random | start position in the clip, seconds |
 | `maskinvert` | — | `1` flips the person mask if a model comes out inverted |
 

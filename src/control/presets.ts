@@ -4,7 +4,7 @@
 // space move through them, and the sequencer advances them.
 //
 // A source added by drag&drop lives on a blob: URL that dies with the tab, so
-// a preset can only restore sources that exist in public/media (the manifest).
+// a preset can only restore sources that exist in assets/input (the manifest).
 
 import type { CamParams, GenOverrides, Look, Macros } from '../types';
 import { DEFAULT_LOOK } from '../types';

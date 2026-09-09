@@ -109,7 +109,7 @@ async function setTrackingCamera(id: string) {
 }
 if (config.cameraEnabled) toggleCamera();
 
-const recorder = new Recorder(canvas, () => audio.stream);
+const recorder = new Recorder(canvas, () => audio.stream, config.recMbps);
 
 const panel = new Panel(bus, midi, {
   media,

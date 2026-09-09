@@ -1,5 +1,5 @@
-// Media catalogue and switching. Sources come from public/media/manifest.json
-// (regenerate with tools/scan-media.sh), from files dragged onto the window,
+// Media catalogue and switching. Sources come from assets/input (the dev
+// server lists it at /media/manifest.json), from files dragged onto the window,
 // and from live cameras (laptop, USB, phones - see live.ts). Videos, still
 // images and cameras all become the film texture; a different source changes
 // the whole piece, so this is meant to be played with.
