@@ -15,7 +15,7 @@ const W = 64;
 const H = 36;
 const ITERATIONS = 8;
 
-type SourceEl = HTMLVideoElement | HTMLImageElement;
+type SourceEl = HTMLVideoElement | HTMLImageElement | ImageBitmap;
 
 export class PaletteExtractor {
   readonly colors: THREE.Vector3[];
@@ -50,7 +50,7 @@ export class PaletteExtractor {
     if (this.accum < this.interval || !el) return;
     if (el instanceof HTMLVideoElement) {
       if (el.readyState < 2 || el.videoWidth === 0) return;
-    } else if (!el.complete || el.naturalWidth === 0) {
+    } else if (el instanceof HTMLImageElement && (!el.complete || el.naturalWidth === 0)) {
       return;
     }
     this.accum = 0;

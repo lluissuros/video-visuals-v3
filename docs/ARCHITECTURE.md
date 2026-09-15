@@ -75,6 +75,25 @@ sources/                     control/                    engine/
   resolution (no CPU resample); the 33 landmarks also give a movement energy
   that swells the aura. Self-contained; when it fails the app runs without it.
 
+## Experimental: aiSource (`src/ai/` + `ai/`)
+
+An optional stage between the film source and the engine: the current source
+frame goes over a local WebSocket to a Python service that runs a one-step
+img2img diffusion model on Core ML (SD-Turbo by default) and the answer comes
+back as the film texture. `main.ts` wires it in three lines (`ai.setInput`,
+`wireFilm`, `ai.update`); the panel mounts its fold through the generic
+`PanelExtension` hook; the engine only sees a texture. The tracker's mask can
+also be painted into the frame the model receives (panel: `silueta antes`):
+`ai.maskProvider` reads the tracker's CPU data and `ai.hidesMask` tells
+`wireMask` to keep the mask away from the engine while it travels that way.
+`silueta pantalla` closes the loop: `ai.afterRender(canvas)`, called right
+after `engine.render`, sends the rendered canvas to the model instead of the
+source. Everything else, the
+protocol, the compositor (EMA crossfade + source mix at render rate) and the
+one-frame mailbox that keeps latency flat, is documented in
+[../ai/README.md](../ai/README.md). Remove both folders and those lines and
+the app is as before.
+
 ## Performance knobs
 
 `?res=` (or the panel's `res` select, remembered per browser) scales the

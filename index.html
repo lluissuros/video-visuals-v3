@@ -74,6 +74,16 @@
       align-items: center; justify-content: center;
     }
     #panel [hidden] { display: none !important; }
+    #panel textarea {
+      width: 100%; box-sizing: border-box; background: #1a1a1e; color: #ccc; border: 1px solid #333;
+      border-radius: 4px; font: 11px/1.4 ui-monospace, monospace; padding: 4px; margin: 2px 0 4px;
+      resize: vertical; user-select: text;
+    }
+    #panel .ai-status { font-size: 10px; color: #666; margin: 2px 0 4px; white-space: nowrap; overflow: hidden; }
+    #panel .ai-status.ok { color: #7a7; }
+    #panel .ai-status.warm { color: #ec6; }
+    #panel .ai-status.err { color: #f66; }
+    #panel .ai-preview { display: block; width: 100%; aspect-ratio: 16 / 10; background: #111; margin: 0 0 6px; border-radius: 2px; }
     #panel .btn-row { display: flex; gap: 6px; margin: 4px 0; }
     #panel .btn-row button { padding: 3px 8px; }
     #panel .status { margin-top: 8px; color: #7a7; }

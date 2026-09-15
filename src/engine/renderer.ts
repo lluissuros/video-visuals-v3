@@ -342,6 +342,9 @@ export class Engine {
     this.coverFit(aspect, this.maskPrepMat.uniforms.uFit.value as THREE.Vector2);
   }
 
+  /** The shared WebGL renderer, for modules that render their own textures. */
+  get gl(): THREE.WebGLRenderer { return this.renderer; }
+
   /** Linear filtering of float textures needs an extension; the tracker asks. */
   get floatLinear(): boolean {
     return this.renderer.extensions.has('OES_texture_float_linear');

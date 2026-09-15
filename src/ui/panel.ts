@@ -31,8 +31,23 @@ export interface PanelStatus {
   fps: number;
 }
 
+/** What an extension gets to build its rows with (the panel's own helpers). */
+export interface PanelKit {
+  body: HTMLElement;
+  sliderRow: Panel['sliderRow'];
+  button: Panel['button'];
+}
+
+/** A self-contained fold added by an optional module (see src/ai). */
+export interface PanelExtension {
+  name: string;
+  mount: (kit: PanelKit) => void;
+}
+
 export interface PanelHooks {
   media: MediaManager;
+  /** Optional folds, mounted right after «fuente». */
+  extensions?: PanelExtension[];
   live: LiveSources;
   recorder: Recorder;
   /** Start or stop the performer tracking. */
@@ -255,6 +270,16 @@ export class Panel {
     btnRow.append(this.loopBtn);
     this.body.appendChild(btnRow);
 
+    // --- optional modules (src/ai, ...) --------------------------------------
+    for (const ext of hooks.extensions ?? []) {
+      this.section(ext.name);
+      ext.mount({
+        body: this.body,
+        sliderRow: this.sliderRow.bind(this),
+        button: this.button.bind(this),
+      });
+    }
+
     // --- camera / silhouette -------------------------------------------------
     this.section('cámara');
     this.trackSel = document.createElement('select');
@@ -403,7 +428,7 @@ export class Panel {
   }
 
   // ---------------------------------------------------------------- helpers
-  private button(text: string, tip: string, onClick: () => void): HTMLButtonElement {
+  button(text: string, tip: string, onClick: () => void): HTMLButtonElement {
     const b = document.createElement('button');
     b.textContent = text;
     b.title = tip;
@@ -453,7 +478,7 @@ export class Panel {
     for (const row of this.starRows) row.hidden = !show;
   }
 
-  private sliderRow(
+  sliderRow(
     label: string, min: number, max: number, step: number, value: number,
     onInput: (v: number) => void,
   ) {

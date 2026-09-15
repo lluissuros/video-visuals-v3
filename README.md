@@ -35,6 +35,10 @@ One-time, only for the performer-tracking prototype:
 ./tools/fetch-models.sh    # MediaPipe wasm + pose models into public/models/
 ```
 
+Experimental: `ai/` holds a local img2img service (one-step diffusion on Core
+ML) that reinterprets the source with a prompt; the panel's **ia** fold drives
+it. See [ai/README.md](ai/README.md).
+
 ## Keys (also under `i` in the app)
 
 `h` panel · `i` instructions · `f` fullscreen · `1-9` load preset N ·

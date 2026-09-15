@@ -10,3 +10,7 @@ node_modules/
 dist/
 .DS_Store
 .playwright-mcp/
+# ai/: converted Core ML packages (minutes to rebuild, GBs) and the uv venv
+ai/models/
+ai/.venv/
+ai/__pycache__/

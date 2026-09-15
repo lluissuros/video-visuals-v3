@@ -18,6 +18,8 @@ import { Recorder } from './ui/recorder';
 import { GEN_TYPE_NAMES, MACRO_NAMES } from './types';
 import { snapTick } from './debug/snap';
 import { PerfMeter } from './debug/perf';
+import { AiSource } from './ai/aiSource';
+import { aiPanel } from './ai/aiPanel';
 
 const canvas = document.getElementById('view') as HTMLCanvasElement;
 
@@ -35,9 +37,15 @@ const engine = new Engine(canvas, resScale, palette.colors);
 const live = new LiveSources(config.phoneHost);
 live.start();
 
+// Experimental img2img stage (src/ai + ai/): sits between the source and the
+// engine. Off, or with its service down, the source goes straight through.
+const ai = new AiSource(config.aiHost, engine.gl);
+const wireFilm = () => engine.setVideoTexture(ai.active ? ai.texture : ai.inputTexture);
+
 const media = new MediaManager(live);
-media.onSource = (tex) => {
-  engine.setVideoTexture(tex);
+media.onSource = (tex, el) => {
+  ai.setInput(tex, el);
+  wireFilm();
   palette.invalidate();
 };
 media.init(config.videoUrl);
@@ -75,25 +83,34 @@ applyUrlOverrides();
 
 // --- camera / tracking prototype ---------------------------------------------
 const tracker = new BodyTracker(engine.floatLinear);
-tracker.onTexture = (tex) => engine.setMaskTexture(tex, tracker.invert);
 let cameraState: PanelStatus['camera'] = 'off';
 let trackingCamera = DEFAULT_LOCAL;
 let maskDebug = false;
+/** The engine gets the mask unless the AI is showing it already (silueta «antes»). */
+const wireMask = () =>
+  engine.setMaskTexture(cameraState === 'on' && !ai.hidesMask ? tracker.texture : null, tracker.invert);
+tracker.onTexture = wireMask;
+ai.onChange = () => { wireFilm(); wireMask(); };
+ai.maskProvider = () => cameraState === 'on'
+  ? { data: tracker.data, width: tracker.width, height: tracker.height,
+      invert: tracker.invert, aspect: aspectOf(live.element(trackingCamera)),
+      color: palette.colors[0].toArray().map((c) => Math.round(c * 255)) as [number, number, number] }
+  : null;
 
 async function toggleCamera() {
   if (cameraState === 'on' || cameraState === 'starting') {
     tracker.stop();
     live.release(trackingCamera);
-    engine.setMaskTexture(null);
     cameraState = 'off';
+    wireMask();
     return;
   }
   cameraState = 'starting';
   // Model first, camera second: a missing model file surfaces even when the
   // camera permission is not granted.
   if ((await tracker.start()) && (await live.acquire(trackingCamera))) {
-    engine.setMaskTexture(tracker.texture, tracker.invert);
     cameraState = 'on';
+    wireMask();
   } else {
     cameraState = 'error';
   }
@@ -113,6 +130,7 @@ const recorder = new Recorder(canvas, () => audio.stream, config.recMbps);
 
 const panel = new Panel(bus, midi, {
   media,
+  extensions: [aiPanel(ai)],
   live,
   recorder,
   onToggleCamera: toggleCamera,
@@ -178,8 +196,9 @@ function tick(now: number) {
 
   if (sim) bus.setWave(sim.tick(dt));
   bus.setAudio(audio.read(dt));
-  palette.update(media.element, dt);
-  engine.setSourceAspect(aspectOf(media.element));
+  ai.update(dt);
+  palette.update(ai.active ? ai.bitmap : media.element, dt);
+  engine.setSourceAspect(ai.active ? ai.aspect : aspectOf(media.element));
   if (tracker.running) {
     const cam = live.element(trackingCamera);
     tracker.setTuning(posesFromParam(bus.cam.poses), confidenceFromParam(bus.cam.confidence));
@@ -192,6 +211,7 @@ function tick(now: number) {
 
   const frame = bus.frame(dt);
   engine.render(frame);
+  ai.afterRender(canvas);
   perf.gpu(engine.gpuMs);
   live.remote.syncMacros({ palette: bus.macros.palette, sat: bus.macros.sat });
   snapTick(canvas, dt, () => ({

@@ -8,6 +8,7 @@
 //   ?phone=192.168.1.40:5276       phone-cam server (tools/phone-cam), if not local
 //   ?res=0.5                       feedback buffer scale (lower = faster on the M1)
 //   ?hold=0                        let the sequencer change presets (default: HOLD on)
+//   ?ai=127.0.0.1:8776             img2img service (ai/server.py), if not local
 
 const q = new URLSearchParams(window.location.search);
 
@@ -21,6 +22,8 @@ export const config = {
   cameraEnabled: q.get('camera') === '1',
   /** Signaling server for phone cameras (node tools/phone-cam/server.mjs). */
   phoneHost: q.get('phone') ?? 'localhost:5276',
+  /** Local img2img service (ai/server.py). ?ai=host:port to move it. */
+  aiHost: q.get('ai') ?? '127.0.0.1:8776',
   /** Feedback buffer resolution relative to the canvas. 1 = full res;
    *  drop to 0.5 on a weaker machine (the M1) if fps suffers. */
   resScale: Number(q.get('res') ?? '1'),
