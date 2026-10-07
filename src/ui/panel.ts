@@ -242,6 +242,8 @@ export class Panel {
       started = true;
       if (this.store.presets.length > 0) {
         bus.setPreset(hooks.startPreset);
+        // The show opens still and silent: the performer brings motion and audio in.
+        Object.assign(bus.macros, { pulse: 0, flow: 0, feed: 0, wash: 0 });
         hooks.onStartPreset();
         this.syncBusControls();
       }

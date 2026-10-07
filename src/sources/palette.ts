@@ -1,6 +1,7 @@
 // Dominant-color extraction. Every few seconds the current frame is
 // downsampled to a small canvas and clustered (k-means, few iterations, seeded
-// from the previous palette so colors glide instead of jumping).
+// from the previous palette). Each extraction only sets a target; the public
+// colors ease toward it every frame, so a new palette glides in, never snaps.
 //
 // Shadows and greys are the majority of most film frames and they used to win
 // the clustering - the palette drifted to murk. Now pixels are FILTERED before
@@ -14,6 +15,8 @@ import * as THREE from 'three';
 const W = 64;
 const H = 36;
 const ITERATIONS = 8;
+/** Seconds for the colors to cover ~63% of the way to a new palette. */
+const GLIDE = 1.2;
 
 type SourceEl = HTMLVideoElement | HTMLImageElement | ImageBitmap;
 
@@ -22,6 +25,7 @@ export class PaletteExtractor {
   private canvas = document.createElement('canvas');
   private ctx: CanvasRenderingContext2D;
   private centers: number[][];
+  private targets: THREE.Vector3[];
   private accum: number;
   private interval: number;
 
@@ -37,6 +41,7 @@ export class PaletteExtractor {
       return [0.5 + 0.4 * Math.sin(t * 6.3), 0.2 + 0.3 * t, 0.2 + 0.2 * (1 - t)];
     });
     this.colors = this.centers.map((c) => new THREE.Vector3(c[0], c[1], c[2]));
+    this.targets = this.colors.map((c) => c.clone());
   }
 
   /** Force an extraction on the next ready frame (e.g. after a source switch). */
@@ -46,6 +51,8 @@ export class PaletteExtractor {
 
   /** Call every frame; extraction only runs when the interval elapses. */
   update(el: SourceEl | null, dt: number) {
+    const k = 1 - Math.exp(-dt / GLIDE);
+    this.colors.forEach((c, i) => c.lerp(this.targets[i], k));
     this.accum += dt;
     if (this.accum < this.interval || !el) return;
     if (el instanceof HTMLVideoElement) {
@@ -120,7 +127,7 @@ export class PaletteExtractor {
     order.forEach((o, i) => {
       const l = (o.c[0] + o.c[1] + o.c[2]) / 3;
       const boost = o.c.map((ch) => Math.min(1, Math.max(0, l + (ch - l) * 1.35)));
-      this.colors[i].set(boost[0], boost[1], boost[2]);
+      this.targets[i].set(boost[0], boost[1], boost[2]);
     });
   }
 }

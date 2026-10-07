@@ -9,13 +9,13 @@ import { DEFAULT_CAM, DEFAULT_GEN, DEFAULT_LOOK, MACRO_NAMES } from '../types';
 import { config } from '../config';
 
 const defaultMacros: Macros = {
-  flow: 0.45,
-  feed: 0.72,
-  wash: 0.3,
+  flow: 0,
+  feed: 0,
+  wash: 0,
   blur: 0.3,
   palette: 0.4,
   sat: 0.4,
-  pulse: 0.5,
+  pulse: 0,
   grain: 0.2,
 };
 
